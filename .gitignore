@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.DS_Store
+
+# Naver authenticated browser session
+.navery/
+.browser/
+naver_wordbook_profile/
