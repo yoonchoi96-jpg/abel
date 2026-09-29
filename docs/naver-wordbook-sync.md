@@ -15,9 +15,11 @@ Examples:
 
 A word may belong to multiple wordbooks. Global word records are deduplicated while membership is preserved.
 
+Naver's `신HSK_6급 필수단어 1~10탄` are grouped into `신HSK 6급`; `신HSK_5급 필수단어 1~5탄` are grouped into `신HSK 5급`.
+
 ## Local data
 
-- Authenticated Chromium profile: `~/.naver_wordbook/browser_profile`
+- Authenticated browser profile: `~/.naver_wordbook/browser_profile` (Chrome by default; Chromium fallback)
 - Raw probe/sync snapshots: `~/.naver_wordbook/exports/`
 - SQLite: `~/.naver_wordbook/naver_wordbook.sqlite3`
 - Repository export: `data/naver_wordbook.json`
@@ -56,3 +58,13 @@ python scripts/naver_wordbook_sync.py --probe
 ```
 
 Probe output is intentionally retained before production sync so the current Naver SPA/API structure can be hardened without losing evidence.
+
+
+## HSK 3.0
+
+Abel also stores two non-Naver collections:
+
+- \`HSK 3.0 6급\`: the user's requested 1,140 **new** Level-6 vocabulary items, with Korean meanings.
+- \`HSK 3.0 7–9급\`: the combined advanced band of 5,600 items. The source list is complete; Korean gloss enrichment remains a separate data layer so source membership/counts remain stable.
+
+The HSK database sync runs once daily at **07:00 KST**. It is idempotent by source + word + pinyin and writes into the same SQLite \`words\` / \`wordbooks\` / \`wordbook_words\` schema.
