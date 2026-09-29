@@ -17,7 +17,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urljoin, urlparse, parse_qs, urlencode, urlunparse
 
-from playwright.sync_api import sync_playwright
 
 DEFAULT_URL = "https://learn.dict.naver.com/wordbook/zhkodict/#/my/cards?wbId=9e2a3d82c347453d87a1013aa9f5ee8f&qt=0&st=0&name=%EB%82%B4%EA%B0%80%20%EC%B0%BE%EC%9D%80%20%EB%8B%A8%EC%96%B4&tab=list&page=1"
 NAVER_DICT_BASE = "https://learn.dict.naver.com/wordbook/zhkodict/"
@@ -847,6 +846,7 @@ def write_repo_export(cards, wordbooks, snapshot_path):
     }
     REPO_EXPORT.write_text(json.dumps(payload,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
 
+# Playwright is imported lazily inside browser-dependent code so stdlib-only jobs can reuse the SQLite helpers.
 def run(mode):
     ensure_dirs()
     init_db()
