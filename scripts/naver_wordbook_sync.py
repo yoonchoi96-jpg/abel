@@ -509,7 +509,7 @@ def discover_wordbooks_from_network(network: list[dict], page) -> list[dict]:
             walk(parsed)
         # Some responses are minified or use separate id/name fields.
         # Pair explicit wordbook-like names with nearby opaque IDs.
-        for m in re.finditer(r"(신HSK[_ ]?[56]급(?:[_ ]?필수단어)?[_ ]?\\d+탄|台湾旅行|투투|내가 찾은 단어)", body):
+        for m in re.finditer(r"(신HSK[_ ]?[56]급(?:[_ ]?필수단어)?[_ ]?\d+탄|台湾旅行|투투|내가 찾은 단어)", body):
             name = m.group(1)
             window = body[max(0, m.start()-2000):m.end()+2000]
             ids = re.findall(r"(?:wbId|wordbookId|wordbook_id|folderId)[\"'\\s:=]+([A-Za-z0-9_-]{16,64})", window, flags=re.I)
@@ -518,10 +518,10 @@ def discover_wordbooks_from_network(network: list[dict], page) -> list[dict]:
 
         # Direct URL fragments are often embedded in router state even when
         # the response is not JSON.
-        for m in re.finditer(r"(?:wbId=|wordbookId[\\\":=]+)([A-Za-z0-9_-]{16,64})", body, flags=re.I):
+        for m in re.finditer(r"(?:wbId=|wordbookId[\":=]+)([A-Za-z0-9_-]{16,64})", body, flags=re.I):
             nid = m.group(1)
             window = body[max(0, m.start()-1500):m.start()+1500]
-            names = re.findall(r"(?:name|title|wordbookName|wordbook_name)[\"'\\s:=]+[\\"]?([^,\"}<&]{1,120})", window, flags=re.I)
+            names = re.findall(r"(?:name|title|wordbookName|wordbook_name)[\"'\s:=]+["]?([^,\"}<&]{1,120})", window, flags=re.I)
             if names:
                 add(names[-1].strip(), nid)
     return list(found.values())
