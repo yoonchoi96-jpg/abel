@@ -2,26 +2,33 @@
 
 Abel is the Naver Dictionary personal wordbook sync system.
 
-## Architecture
+## Core design
 
-Naver Dictionary authenticated browser session -> Playwright on the user's Mac -> local raw snapshots + SQLite -> data/naver_wordbook.json -> GitHub Actions commit.
+**Naver authenticated browser session → Playwright on Mac → raw snapshots + normalized SQLite → GitHub JSON export → GitHub Actions scheduled sync**
 
-GitHub-hosted runners are intentionally not used for the authenticated Naver browser session. A self-hosted Mac runner keeps the login session local.
+Abel preserves **multiple Naver wordbooks as separate first-class collections** and keeps wordbook membership many-to-many. Words are globally deduplicated.
 
-## One-time setup
+### Wordbooks
 
-1. Clone this repository on the Mac.
-2. Install Python 3.11 and Playwright.
-3. Run the bootstrap command.
-4. Log in to Naver and make sure the personal wordbook is visible.
-5. Press Enter in the terminal.
-6. Run probe mode.
-7. Register the Mac as a GitHub Actions self-hosted runner with labels self-hosted, macOS, naver-wordbook.
+Examples include:
+- 단어장
+- Netflix 저장 단어장
+- 대만 여행
+- HSK 5급
+- HSK 6급
 
-Never commit the browser profile. It contains authenticated session data.
+A word appearing in HSK 5급 and HSK 6급 is stored once as a word and linked to both books.
 
 ## Commands
 
-    python scripts/naver_wordbook_sync.py --bootstrap
-    python scripts/naver_wordbook_sync.py --probe
-    python scripts/naver_wordbook_sync.py --sync
+```bash
+python scripts/naver_wordbook_sync.py --bootstrap
+python scripts/naver_wordbook_sync.py --probe
+python scripts/naver_wordbook_sync.py --sync
+```
+
+## Security
+
+The Naver password is never stored by Abel. The authenticated browser profile stays on the Mac and must never be committed.
+
+GitHub Actions uses a self-hosted Mac runner because the authenticated browser state is local.
