@@ -39,7 +39,18 @@ def ensure_dirs() -> None:
     REPO_EXPORT.parent.mkdir(parents=True, exist_ok=True)
 
 def init_db() -> None:
+    DATA_ROOT.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as db:
+        db.execute("PRAGMA foreign_keys=ON")
+        legacy = db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='words'"
+        ).fetchone()
+        if legacy:
+            cols = {r[1] for r in db.execute("PRAGMA table_info(words)").fetchall()}
+            if "wordbook" in cols and "wordbook_words" not in {
+                r[1] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+            }:
+                db.execute("ALTER TABLE words RENAME TO words_legacy")
         db.executescript("""
         CREATE TABLE IF NOT EXISTS wordbooks (
             id INTEGER PRIMARY KEY,
@@ -77,6 +88,47 @@ def init_db() -> None:
         CREATE INDEX IF NOT EXISTS idx_wordbook_words_word ON wordbook_words(word_id);
         CREATE INDEX IF NOT EXISTS idx_wordbook_words_wordbook ON wordbook_words(wordbook_id);
         """)
+        legacy_exists = db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='words_legacy'"
+        ).fetchone()
+        if legacy_exists:
+            rows = db.execute(
+                "SELECT word,meaning,pronunciation,part_of_speech,example,wordbook,source_url,first_seen,last_seen,raw_json FROM words_legacy"
+            ).fetchall()
+            for row in rows:
+                word, meaning, pronunciation, pos, example, wb_name, source_url, first_seen, last_seen, raw_json = row
+                db.execute("""
+                    INSERT INTO words(word,meaning,pronunciation,part_of_speech,example,source_url,first_seen,last_seen,raw_json)
+                    VALUES(?,?,?,?,?,?,?,?,?)
+                    ON CONFLICT(word,meaning) DO UPDATE SET
+                      pronunciation=COALESCE(excluded.pronunciation,words.pronunciation),
+                      part_of_speech=COALESCE(excluded.part_of_speech,words.part_of_speech),
+                      example=COALESCE(excluded.example,words.example),
+                      source_url=COALESCE(excluded.source_url,words.source_url),
+                      first_seen=MIN(words.first_seen,excluded.first_seen),
+                      last_seen=MAX(words.last_seen,excluded.last_seen),
+                      raw_json=COALESCE(excluded.raw_json,words.raw_json)
+                """, (word,meaning,pronunciation,pos,example,source_url,first_seen,last_seen,raw_json))
+                if wb_name:
+                    now = now_iso()
+                    db.execute("""
+                        INSERT INTO wordbooks(naver_id,name,source_url,first_seen,last_seen,raw_json)
+                        VALUES(NULL,?,?,?,?,?)
+                        ON CONFLICT(naver_id,name) DO UPDATE SET
+                          source_url=COALESCE(excluded.source_url,wordbooks.source_url),
+                          last_seen=MAX(wordbooks.last_seen,excluded.last_seen)
+                    """, (wb_name,source_url,first_seen or now,last_seen or now,raw_json))
+                    wbid = db.execute(
+                        "SELECT id FROM wordbooks WHERE naver_id IS NULL AND name=?", (wb_name,)
+                    ).fetchone()[0]
+                    wid = db.execute(
+                        "SELECT id FROM words WHERE word=? AND meaning=?", (word,meaning)
+                    ).fetchone()[0]
+                    db.execute("""
+                        INSERT OR IGNORE INTO wordbook_words(wordbook_id,word_id,first_seen,last_seen,raw_json)
+                        VALUES(?,?,?,?,?)
+                    """, (wbid,wid,first_seen or now,last_seen or now,raw_json))
+            db.execute("DROP TABLE words_legacy")
         db.commit()
 
 def lines(text: str) -> list[str]:
@@ -125,103 +177,132 @@ def attr(el, name):
         return ""
 
 def discover_wordbooks(page) -> list[dict]:
-    """
-    Best-effort discovery from links/buttons/ARIA labels and hrefs.
-    The raw DOM is retained in probe snapshots, so selectors can be tightened
-    after the first real Naver session.
-    """
     found = {}
+
+    def add(name="", href="", naver_id="", raw_text=""):
+        name = (name or "").strip()
+        href = (href or "").strip()
+        naver_id = (naver_id or "").strip()
+        if not name and not naver_id:
+            return
+        if not (naver_id or href or "단어장" in name or "HSK" in name.upper() or "여행" in name):
+            return
+        source_url = urljoin(page.url, href) if href else page.url
+        key = naver_id or href or name
+        found[key] = {
+            "naver_id": naver_id,
+            "name": name or f"wordbook:{naver_id}",
+            "href": href,
+            "source_url": source_url,
+            "raw_text": raw_text or name,
+        }
+
+    # Current/legacy Naver wordbook URLs expose the stable wbId in the hash.
+    try:
+        anchors = page.locator("a[href*='wbId=']")
+        for i in range(min(anchors.count(), 1000)):
+            el = anchors.nth(i)
+            if not el.is_visible():
+                continue
+            href = attr(el, "href")
+            text = visible_text(el)
+            m = re.search(r"[?&]wbId=([^&#]+)", href)
+            add(text, href, m.group(1) if m else "", text)
+    except Exception:
+        pass
+
+    # Older UI used #main_folder. Extract the folder label and clickable href/id
+    # without depending on one exact CSS implementation.
+    try:
+        folder = page.locator("#main_folder")
+        if folder.count():
+            for el in folder.locator("a").all():
+                if not el.is_visible():
+                    continue
+                href = attr(el, "href")
+                text = visible_text(el)
+                m = re.search(r"[?&]wbId=([^&#]+)", href)
+                add(text, href, m.group(1) if m else "", text)
+    except Exception:
+        pass
+
+    # Generic fallback for SPA versions where folder links are buttons.
     selectors = [
-        "a[href*='wordbook']", "a[href*='#/my/']",
-        "[role='link']", "button", "[role='button']",
-        "li", "[class*='wordbook']", "[class*='Wordbook']",
+        "[data-wb-id]", "[data-wordbook-id]", "[data-wordbookid]",
+        "[class*='wordbook']", "[class*='Wordbook']",
     ]
     for selector in selectors:
         try:
             loc = page.locator(selector)
-            for i in range(min(loc.count(), 3000)):
+            for i in range(min(loc.count(), 2000)):
                 el = loc.nth(i)
                 if not el.is_visible():
                     continue
                 text = visible_text(el)
                 href = attr(el, "href")
-                aria = attr(el, "aria-label")
-                title = attr(el, "title")
-                data_id = ""
-                for a in ("data-id", "data-wordbook-id", "data-wordbookid", "data-book-id"):
-                    data_id = attr(el, a)
-                    if data_id:
-                        break
-                label = (text or aria or title).strip()
-                if not label or len(label) > 200:
-                    continue
-                if not (href or data_id or "단어장" in label or "HSK" in label.upper() or "여행" in label):
-                    continue
-                if label.lower() in {"로그인", "회원가입", "검색", "닫기", "메뉴"}:
-                    continue
-                key = f"{href}|{data_id}|{label}"
-                found[key] = {
-                    "naver_id": data_id,
-                    "name": label,
-                    "href": href,
-                    "source_url": urljoin(page.url, href) if href else page.url,
-                    "raw_text": text,
-                }
+                data_id = (
+                    attr(el, "data-wb-id") or attr(el, "data-wordbook-id")
+                    or attr(el, "data-wordbookid")
+                )
+                if data_id or href or "단어장" in text or "HSK" in text.upper() or "여행" in text:
+                    add(text, href, data_id, text)
         except Exception:
             continue
 
-    # Prefer items whose href/label actually looks like a wordbook.
-    candidates = []
-    for item in found.values():
-        blob = " ".join(str(item.get(k, "")) for k in ("href", "name", "raw_text")).lower()
-        if "wordbook" in blob or "#/my/" in blob or "단어장" in blob or "hsk" in blob:
-            candidates.append(item)
+    if not found:
+        add("단어장", "", "", "fallback")
 
-    # Always retain the main page as a fallback pseudo-wordbook.
-    if not candidates:
-        candidates = [{
-            "naver_id": "",
-            "name": "단어장",
-            "href": "",
-            "source_url": page.url,
-            "raw_text": "",
-        }]
-    # De-dupe by stable-ish identity, then name.
-    out, seen = [], set()
-    for x in candidates:
-        key = (x.get("naver_id") or "", x.get("href") or "", x["name"])
-        if key not in seen:
-            seen.add(key)
-            out.append(x)
-    return out
+    return list(found.values())
 
 def extract_cards(page, wordbook: dict) -> list[dict]:
     selectors = [
-        "[class*='wordbook'] li", "[class*='Wordbook'] li",
-        "[class*='wordbook'] [role='listitem']", "[class*='Wordbook'] [role='listitem']",
-        "[class*='card']", "[class*='Card']", "li",
+        ".card_word",
+        "li.card_word",
+        ".inner_card",
+        "[class*='card_word']",
+        "[class*='inner_card']",
     ]
     cards, seen = [], set()
     for selector in selectors:
         try:
             loc = page.locator(selector)
-            for i in range(min(loc.count(), 5000)):
+            for i in range(min(loc.count(), 10000)):
                 el = loc.nth(i)
                 if not el.is_visible():
                     continue
                 raw = visible_text(el)
                 ls = lines(raw)
-                if not ls or len(raw) > 3000 or len(ls[0]) > 200:
+                if not ls or len(raw) > 10000:
                     continue
-                if ls[0].lower() in {"단어장", "로그인", "검색", "메뉴", "닫기"}:
+
+                word = ""
+                try:
+                    word = visible_text(el.locator(".title").first)
+                except Exception:
+                    pass
+                if not word:
+                    word = ls[0]
+                word = re.sub(r"^[0-9]+[.)\\s]+", "", word).strip()
+                if not word or len(word) > 300:
                     continue
-                key = raw[:2000]
+
+                meanings = []
+                try:
+                    ml = el.locator(".list_mean")
+                    for j in range(min(ml.count(), 50)):
+                        t = visible_text(ml.nth(j))
+                        if t:
+                            meanings.append(t)
+                except Exception:
+                    pass
+                meaning = "\n".join(meanings) if meanings else (ls[1] if len(ls) > 1 else "")
+                key = (word, meaning, wordbook.get("naver_id",""))
                 if key in seen:
                     continue
                 seen.add(key)
                 cards.append({
-                    "word": ls[0],
-                    "meaning": ls[1] if len(ls) > 1 else "",
+                    "word": word,
+                    "meaning": meaning,
                     "pronunciation": "",
                     "part_of_speech": "",
                     "example": "\n".join(ls[2:]),
@@ -234,6 +315,57 @@ def extract_cards(page, wordbook: dict) -> list[dict]:
             continue
     return cards
 
+def page_info(page):
+    try:
+        current = visible_text(page.locator("#page_area div span").nth(0))
+        spans = page.locator("#page_area div span")
+        vals = [visible_text(spans.nth(i)) for i in range(min(spans.count(), 20))]
+        nums = [x for x in vals if re.fullmatch(r"\\d+", x or "")]
+        return (int(nums[0]), int(nums[1])) if len(nums) >= 2 else (1, 1)
+    except Exception:
+        return (1, 1)
+
+def next_page(page) -> bool:
+    try:
+        area = page.locator("#page_area")
+        buttons = area.locator("button")
+        if buttons.count() < 2:
+            return False
+        btn = buttons.nth(1)
+        disabled = attr(btn, "disabled")
+        aria = attr(btn, "aria-disabled")
+        cls = attr(btn, "class")
+        if disabled or aria == "true" or "disabled" in cls:
+            return False
+        btn.click()
+        page.wait_for_timeout(1200)
+        return True
+    except Exception:
+        return False
+
+def collect_wordbook(page, wb: dict) -> list[dict]:
+    target = wb.get("source_url") or page.url
+    try:
+        if target != page.url:
+            page.goto(target, wait_until="domcontentloaded", timeout=45_000)
+        page.wait_for_timeout(1800)
+        cards = []
+        seen_pages = set()
+        for _ in range(500):
+            scroll_settle(page)
+            current, total = page_info(page)
+            sig = (current, total, page.url)
+            if sig in seen_pages:
+                break
+            seen_pages.add(sig)
+            cards.extend(extract_cards(page, wb))
+            if current >= total or not next_page(page):
+                break
+        return cards
+    except Exception:
+        return []
+
+
 def scroll_settle(page):
     for _ in range(12):
         page.mouse.wheel(0, 1800)
@@ -242,36 +374,27 @@ def scroll_settle(page):
 def collect(page) -> tuple[list[dict], list[dict], list[dict]]:
     network = capture_network(page)
     page.goto(DEFAULT_URL, wait_until="domcontentloaded", timeout=60_000)
-    page.wait_for_timeout(4_000)
+    page.wait_for_timeout(3500)
     scroll_settle(page)
 
     wordbooks = discover_wordbooks(page)
     all_cards = []
     visited = set()
 
-    # First collect current main page.
-    main = wordbooks[:]
-    for wb in main:
-        href = wb.get("href")
+    # Main page may contain folders; visit every discovered stable wbId URL.
+    for wb in wordbooks:
         target = wb.get("source_url") or page.url
-        if target in visited:
+        identity = wb.get("naver_id") or target
+        if identity in visited:
             continue
-        visited.add(target)
-        try:
-            if target != page.url:
-                page.goto(target, wait_until="domcontentloaded", timeout=45_000)
-                page.wait_for_timeout(2_500)
-            scroll_settle(page)
-            all_cards.extend(extract_cards(page, wb))
-        except Exception:
-            continue
+        visited.add(identity)
+        all_cards.extend(collect_wordbook(page, wb))
 
-    # If discovery only found generic UI labels, the main page still contributes.
+    # If folder discovery failed, still parse the main page once.
     if not all_cards:
         fallback = {"naver_id": "", "name": "단어장", "source_url": page.url}
-        all_cards.extend(extract_cards(page, fallback))
+        all_cards.extend(collect_wordbook(page, fallback))
 
-    # Deduplicate exact same membership/card.
     dedup = {}
     for c in all_cards:
         key = (c.get("word",""), c.get("meaning",""), c.get("wordbook_id",""), c.get("wordbook",""))
@@ -282,6 +405,8 @@ def save_snapshot(mode, page, cards, wordbooks, network) -> Path:
     payload = {
         "captured_at": now_iso(), "mode": mode, "url": page.url, "title": page.title(),
         "wordbooks": wordbooks, "cards": cards, "network": network,
+        "final_dom_html": page.content()[:5_000_000],
+        "final_local_storage": page.evaluate("Object.fromEntries(Object.entries(localStorage))"),
     }
     path = EXPORT_DIR / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{mode}.json"
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
