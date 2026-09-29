@@ -25,11 +25,6 @@ jobs:
         run: |
           python3 --version
           which python3
-          python3 -m pip --version
-      - name: Install dependencies
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install -r requirements.txt
       - name: Sync HSK 3.0
         run: python3 scripts/hsk30_sync.py --sync
       - name: Commit HSK database export
