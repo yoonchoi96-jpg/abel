@@ -521,7 +521,7 @@ def discover_wordbooks_from_network(network: list[dict], page) -> list[dict]:
         for m in re.finditer(r"(?:wbId=|wordbookId[\":=]+)([A-Za-z0-9_-]{16,64})", body, flags=re.I):
             nid = m.group(1)
             window = body[max(0, m.start()-1500):m.start()+1500]
-            names = re.findall(r"(?:name|title|wordbookName|wordbook_name)[\"'\s:=]+["]?([^,\"}<&]{1,120})", window, flags=re.I)
+            names = re.findall(r"""(?:name|title|wordbookName|wordbook_name)["'\\s:=]+["']?([^,"}<&]{1,120})""", window, flags=re.I)
             if names:
                 add(names[-1].strip(), nid)
     return list(found.values())

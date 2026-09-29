@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-09-29T13:00:24.938036+00:00",
+  "collections": [
+    {
+      "id": "hsk30:6",
+      "name": "HSK 3.0 6급",
+      "rows": 1140
+    },
+    {
+      "id": "hsk30:7-9",
+      "name": "HSK 3.0 7–9급",
+      "rows": 5600
+    }
+  ],
+  "source": "Abel curated HSK 3.0 vocabulary sources"
+}
