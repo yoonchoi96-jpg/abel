@@ -554,16 +554,24 @@ def upsert_db(cards, wordbooks):
         db.execute("PRAGMA foreign_keys=ON")
         wb_map = {}
         for wb in wordbooks:
-            name = wb.get("name") or "단어장"
+            raw_name = wb.get("name") or "단어장"
+            name = normalize_wordbook_name(raw_name)
             nid = wb.get("naver_id") or None
+
+            # HSK 5/6 numbered Naver volumes are intentionally collapsed into
+            # one DB collection each. Keep the opaque Naver IDs only in raw_json.
+            grouped = name in {"신HSK 5급", "신HSK 6급"}
+            db_nid = None if grouped else nid
             db.execute("""
                 INSERT INTO wordbooks(naver_id,name,source_url,first_seen,last_seen,raw_json)
                 VALUES(?,?,?,?,?,?)
                 ON CONFLICT(naver_id,name) DO UPDATE SET
                   source_url=excluded.source_url,last_seen=excluded.last_seen,raw_json=excluded.raw_json
-            """, (nid,name,wb.get("source_url",""),now,now,json.dumps(wb,ensure_ascii=False)))
-            row = db.execute("SELECT id FROM wordbooks WHERE naver_id IS ? AND name=?", (nid,name)).fetchone()
-            wb_map[(nid,name)] = row[0]
+            """, (db_nid,name,wb.get("source_url",""),now,now,json.dumps(wb,ensure_ascii=False)))
+            row = db.execute("SELECT id FROM wordbooks WHERE naver_id IS ? AND name=?", (db_nid,name)).fetchone()
+            if row:
+                wb_map[(nid,raw_name)] = row[0]
+                wb_map[(nid,name)] = row[0]
 
         for c in cards:
             word, meaning = c.get("word",""), c.get("meaning","")
@@ -578,8 +586,9 @@ def upsert_db(cards, wordbooks):
                   c.get("example",""),c.get("source_url",""),now,now,json.dumps(c,ensure_ascii=False)))
             wid = db.execute("SELECT id FROM words WHERE word=? AND meaning=?", (word,meaning)).fetchone()[0]
             nid = c.get("wordbook_id") or None
-            name = c.get("wordbook") or "단어장"
-            wbid = wb_map.get((nid,name))
+            raw_name = c.get("wordbook") or "단어장"
+            name = normalize_wordbook_name(raw_name)
+            wbid = wb_map.get((nid,raw_name)) or wb_map.get((nid,name))
             if wbid:
                 db.execute("""
                     INSERT INTO wordbook_words(wordbook_id,word_id,first_seen,last_seen,raw_json)
@@ -607,11 +616,24 @@ def write_repo_export(cards, wordbooks, snapshot_path):
     for key, v in words.items():
         v["wordbooks"] = memberships[key]
 
+    grouped_wordbooks = {}
+    for wb in wordbooks:
+        name = normalize_wordbook_name(wb.get("name") or "단어장")
+        entry = grouped_wordbooks.setdefault(name, {
+            "name": name,
+            "naver_ids": [],
+            "source_urls": [],
+        })
+        if wb.get("naver_id") and wb["naver_id"] not in entry["naver_ids"]:
+            entry["naver_ids"].append(wb["naver_id"])
+        if wb.get("source_url") and wb["source_url"] not in entry["source_urls"]:
+            entry["source_urls"].append(wb["source_url"])
+
     payload = {
-        "schema_version": 2,
+        "schema_version": 3,
         "updated_at": now_iso(),
         "source": "naver_dictionary_personal_wordbooks",
-        "wordbooks": wordbooks,
+        "wordbooks": list(grouped_wordbooks.values()),
         "words": list(words.values()),
         "count": len(words),
         "membership_count": sum(len(v) for v in memberships.values()),
