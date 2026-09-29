@@ -315,6 +315,53 @@ def expand_wordbook_manager(page) -> dict:
     diagnostics["url_after"] = page.url
     return diagnostics
 
+def click_wordbook_ui_targets(page) -> None:
+    """Probe likely SPA controls that reveal the private wordbook chooser."""
+    targets = [
+        "내 단어장", "단어장 관리", "단어장", "내가 찾은 단어",
+        "중국어단어장", "내 서랍",
+    ]
+    original = page.url
+    for label in targets:
+        try:
+            loc = page.get_by_text(label, exact=True)
+            count = min(loc.count(), 5)
+            for i in range(count):
+                el = loc.nth(i)
+                if not el.is_visible():
+                    continue
+                before = page.url
+                try:
+                    el.click(timeout=1500)
+                    page.wait_for_timeout(900)
+                except Exception:
+                    continue
+                # Let the SPA render, then keep the state if it contains
+                # evidence of actual private wordbook links/IDs.
+                try:
+                    body = page.locator("body").inner_text(timeout=1000)
+                    html = page.content()
+                    evidence = (
+                        "wbId=" in html or
+                        "#/my/cards" in html or
+                        "HSK" in body.upper() or
+                        "내가 찾은 단어" in body or
+                        "台湾旅行" in body or
+                        "투투" in body
+                    )
+                except Exception:
+                    evidence = False
+                if evidence:
+                    return
+                if page.url != before:
+                    try:
+                        page.goto(original, wait_until="domcontentloaded", timeout=15000)
+                        page.wait_for_timeout(700)
+                    except Exception:
+                        pass
+        except Exception:
+            continue
+
 def discover_wordbooks(page) -> list[dict]:
     found = {}
 
@@ -350,9 +397,10 @@ def discover_wordbooks(page) -> list[dict]:
     except Exception:
         pass
 
-    # The private wordbook list is often loaded only after opening the
-    # authenticated "중국어단어장" chooser. Do this before falling back to DOM
-    # selectors so opaque wbIds are discovered rather than guessed.
+    # The private wordbook list is often loaded only after opening an
+    # authenticated SPA control. Probe the safe text-based entry points first,
+    # then the dedicated manager helper.
+    click_wordbook_ui_targets(page)
     expand_wordbook_manager(page)
     for selector in ["a[href*='wbId=']", "a[href*='#/my/cards']", "[data-wb-id]", "[data-wordbook-id]", "[data-wordbookid]"]:
         try:
