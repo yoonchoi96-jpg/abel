@@ -174,6 +174,69 @@ def safe_json(value):
     except Exception:
         return None
 
+CLIENT_HOOK = r"""
+(() => {
+  if (window.__abelNetHookInstalled) return;
+  window.__abelNetHookInstalled = true;
+  window.__abelNet = [];
+  const push = (kind, url, status, body) => {
+    try {
+      window.__abelNet.push({
+        kind, url: String(url || ""), status: Number(status || 0),
+        body: typeof body === "string" ? body.slice(0, 2000000) : ""
+      });
+    } catch (_) {}
+  };
+
+  const origFetch = window.fetch;
+  window.fetch = async function(...args) {
+    const response = await origFetch.apply(this, args);
+    try {
+      const clone = response.clone();
+      const body = await clone.text();
+      push("fetch", response.url || (args[0] && args[0].url) || args[0], response.status, body);
+    } catch (_) {}
+    return response;
+  };
+
+  const origOpen = XMLHttpRequest.prototype.open;
+  const origSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+    this.__abelUrl = url;
+    this.__abelMethod = method;
+    return origOpen.call(this, method, url, ...rest);
+  };
+  XMLHttpRequest.prototype.send = function(...args) {
+    this.addEventListener("load", function() {
+      try {
+        push("xhr", this.responseURL || this.__abelUrl, this.status,
+             typeof this.responseText === "string" ? this.responseText : "");
+      } catch (_) {}
+    });
+    return origSend.apply(this, args);
+  };
+})();
+"""
+
+def install_client_hook(page):
+    try:
+        page.add_init_script(CLIENT_HOOK)
+    except Exception:
+        pass
+
+def client_network(page):
+    try:
+        return page.evaluate("window.__abelNet || []")
+    except Exception:
+        return []
+
+def performance_urls(page):
+    try:
+        return page.evaluate("""performance.getEntriesByType('resource').map(x => x.name)
+            .filter(x => /wordbook|dict.naver|learn.dict|api|ajax/i.test(x))""")
+    except Exception:
+        return []
+
 def capture_network(page):
     events = []
     def on_response(response):
@@ -572,10 +635,28 @@ def scroll_settle(page):
         page.wait_for_timeout(700)
 
 def collect(page) -> tuple[list[dict], list[dict], list[dict]]:
+    install_client_hook(page)
     network = capture_network(page)
     page.goto(DEFAULT_URL, wait_until="domcontentloaded", timeout=60_000)
     page.wait_for_timeout(3500)
     scroll_settle(page)
+
+    # The app can use fetch/XHR from a service-worker/cache path that does not
+    # reliably surface as Playwright response events. Merge our browser-context
+    # hook plus performance resource URLs into the diagnostic network set.
+    hooked = client_network(page)
+    for e in hooked:
+        if isinstance(e, dict):
+            network.append({
+                "url": e.get("url",""),
+                "status": e.get("status"),
+                "content_type": "client-hook",
+                "body": e.get("body",""),
+                "source": e.get("kind","client"),
+            })
+    for u in performance_urls(page):
+        if not any(x.get("url") == u for x in network):
+            network.append({"url": u, "status": None, "content_type": "performance", "body": ""})
 
     wordbooks = discover_wordbooks(page)
     network_wordbooks = discover_wordbooks_from_network(network, page)
