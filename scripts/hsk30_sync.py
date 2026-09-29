@@ -66,27 +66,33 @@ def sync():
                 pos = (row.get("pos") or "").strip()
                 source = str(path.relative_to(ROOT))
                 raw = json.dumps(row, ensure_ascii=False)
-                db.execute(
-                    """INSERT INTO words(word,meaning,pronunciation,part_of_speech,example,
-                       source_url,first_seen,last_seen,raw_json)
-                       VALUES(?,?,?,?,?,?,?,?,?)
-                       ON CONFLICT(word,meaning) DO UPDATE SET
-                         pronunciation=COALESCE(NULLIF(excluded.pronunciation,''),words.pronunciation),
-                         part_of_speech=COALESCE(NULLIF(excluded.part_of_speech,''),words.part_of_speech),
-                         source_url=excluded.source_url,last_seen=excluded.last_seen,
-                         raw_json=excluded.raw_json""",
-                    (word, meaning, pronunciation, pos, "", source, now, now, raw),
-                )
-                # When meaning_ko is blank, the UNIQUE(word, meaning) key cannot
-                # merge with a pre-existing translated row. Resolve by word first.
+
+                # Match an existing HSK row by source + word + pinyin when the
+                # Korean gloss is not populated yet. This keeps the advanced
+                # band idempotent without collapsing homographs.
                 row_id = db.execute(
-                    "SELECT id FROM words WHERE word=? AND meaning IS ? ORDER BY id LIMIT 1",
-                    (word, meaning),
+                    """SELECT id FROM words
+                       WHERE word=? AND pronunciation=? AND source_url=?
+                       ORDER BY id LIMIT 1""",
+                    (word, pronunciation, source),
                 ).fetchone()
-                if not row_id:
-                    row_id = db.execute(
-                        "SELECT id FROM words WHERE word=? ORDER BY id LIMIT 1", (word,)
-                    ).fetchone()
+                if row_id:
+                    db.execute(
+                        """UPDATE words SET
+                           meaning=COALESCE(?,meaning),
+                           part_of_speech=COALESCE(NULLIF(?,''),part_of_speech),
+                           last_seen=?,raw_json=?
+                           WHERE id=?""",
+                        (meaning, pos, now, raw, row_id[0]),
+                    )
+                else:
+                    db.execute(
+                        """INSERT INTO words(word,meaning,pronunciation,part_of_speech,example,
+                           source_url,first_seen,last_seen,raw_json)
+                           VALUES(?,?,?,?,?,?,?,?,?)""",
+                        (word, meaning, pronunciation, pos, "", source, now, now, raw),
+                    )
+                    row_id = db.execute("SELECT last_insert_rowid()").fetchone()
                 if not row_id:
                     continue
                 db.execute(
