@@ -15,7 +15,7 @@ import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse, parse_qs, urlencode, urlunparse
 
 from playwright.sync_api import sync_playwright
 
@@ -23,6 +23,36 @@ DEFAULT_URL = "https://learn.dict.naver.com/wordbook/zhkodict/#/my/cards?wbId=9e
 NAVER_DICT_BASE = "https://learn.dict.naver.com/wordbook/zhkodict/"
 START_WB_ID = "9e2a3d82c347453d87a1013aa9f5ee8f"
 START_WB_NAME = "내가 찾은 단어"
+
+# Known personal wordbooks supplied from the user's authenticated Naver session.
+# Unknown numbered HSK volumes are discovered separately from the wordbook UI.
+SEED_WORDBOOKS = [
+    {
+        "naver_id": "9e2a3d82c347453d87a1013aa9f5ee8f",
+        "name": "내가 찾은 단어",
+        "source_url": DEFAULT_URL,
+    },
+    {
+        "naver_id": "e96458b2504648af84f749e41aa00d6d",
+        "name": "台湾旅行",
+        "source_url": "https://learn.dict.naver.com/wordbook/zhkodict/#/my/cards?wbId=e96458b2504648af84f749e41aa00d6d&qt=0&st=0&name=%E5%8F%B0%E6%B9%BE%E6%97%85%E8%A1%8C&tab=list&page=1",
+    },
+    {
+        "naver_id": "d2d50c21c29b4567bc1294d1360f61da",
+        "name": "투투",
+        "source_url": "https://learn.dict.naver.com/wordbook/zhkodict/#/my/cards?wbId=d2d50c21c29b4567bc1294d1360f61da&qt=0&st=0&name=%ED%88%AC%ED%88%AC&tab=list&page=1",
+    },
+    {
+        "naver_id": "189253cd3de2425ba1dcb37a9fe124df",
+        "name": "신HSK_6급 필수단어 10탄",
+        "source_url": "https://learn.dict.naver.com/wordbook/zhkodict/#/my/cards?wbId=189253cd3de2425ba1dcb37a9fe124df&qt=0&st=0&name=%EC%8B%A0HSK_6%EA%B8%89%20%ED%95%84%EC%88%98%EB%8B%A8%EC%96%B4%2010%ED%83%84&tab=list&page=1",
+    },
+    {
+        "naver_id": "c292bb7b12fd462a9b39310ebe3c29ab",
+        "name": "신HSK_5급 필수단어 5탄",
+        "source_url": "https://learn.dict.naver.com/wordbook/zhkodict/#/my/cards?wbId=c292bb7b12fd462a9b39310ebe3c29ab&qt=0&st=0&name=%EC%8B%A0HSK_5%EA%B8%89%20%ED%95%84%EC%88%98%EB%8B%A8%EC%96%B4%205%ED%83%84&tab=list&page=1",
+    },
+]
 DATA_ROOT = Path(os.environ.get("NAVER_WORDBOOK_DATA", "~/.naver_wordbook")).expanduser()
 PROFILE_DIR = DATA_ROOT / "browser_profile"
 EXPORT_DIR = DATA_ROOT / "exports"
@@ -264,6 +294,11 @@ def discover_wordbooks(page) -> list[dict]:
         current_name = unquote(q.get("name", [START_WB_NAME])[0]) or START_WB_NAME
         add(current_name, page.url, m.group(1), current_name)
 
+    # Add authenticated-session wordbooks that were explicitly identified by the user.
+    # This is deliberately limited to stable wbId URLs; no private wordbook is guessed.
+    for wb in SEED_WORDBOOKS:
+        found[wb["naver_id"]] = dict(wb, href=wb["source_url"], raw_text=wb["name"])
+
     # Never fabricate a private wordbook from recommendation text.
     return list(found.values())
 
@@ -360,6 +395,21 @@ def next_page(page) -> bool:
     except Exception:
         return False
 
+def page_url(target: str, page_number: int) -> str:
+    """Replace the hash-route page parameter without relying on UI pagination."""
+    parsed = urlparse(target)
+    fragment = parsed.fragment
+    if not fragment:
+        return target
+    if "?" not in fragment:
+        return target
+    route, query = fragment.split("?", 1)
+    params = parse_qs(query, keep_blank_values=True)
+    params["page"] = [str(page_number)]
+    new_query = urlencode(params, doseq=True)
+    return urlunparse(parsed._replace(fragment=f"{route}?{new_query}"))
+
+
 def collect_wordbook(page, wb: dict) -> list[dict]:
     target = wb.get("source_url") or page.url
     try:
@@ -367,17 +417,37 @@ def collect_wordbook(page, wb: dict) -> list[dict]:
             page.goto(target, wait_until="domcontentloaded", timeout=45_000)
         page.wait_for_timeout(1800)
         cards = []
-        seen_pages = set()
+        seen_signatures = set()
+        target_page = 1
+
+        # The Naver SPA exposes the page number in the hash route. Iterate the
+        # route directly so collection does not depend on brittle pagination CSS.
         for _ in range(500):
+            target = page_url(wb.get("source_url") or page.url, target_page)
+            page.goto(target, wait_until="domcontentloaded", timeout=45_000)
+            page.wait_for_timeout(1200)
             scroll_settle(page)
-            current, total = page_info(page)
-            sig = (current, total, page.url)
-            if sig in seen_pages:
+
+            page_cards = extract_cards(page, wb)
+            signature = (
+                target_page,
+                tuple((c.get("word", ""), c.get("meaning", "")) for c in page_cards[:5]),
+                len(page_cards),
+            )
+            if signature in seen_signatures:
                 break
-            seen_pages.add(sig)
-            cards.extend(extract_cards(page, wb))
-            if current >= total or not next_page(page):
+            seen_signatures.add(signature)
+
+            if not page_cards:
                 break
+
+            cards.extend(page_cards)
+
+            # A short/partial page is the natural terminal condition.
+            if len(page_cards) < 20:
+                break
+            target_page += 1
+
         return cards
     except Exception:
         return []
