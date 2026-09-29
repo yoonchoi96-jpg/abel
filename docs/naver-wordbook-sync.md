@@ -1,63 +1,58 @@
-# Naver Dictionary Wordbook Sync
+# Abel — Naver Wordbook Sync
 
-## Goal
+Abel keeps a machine-readable copy of the user's Naver Dictionary personal wordbooks.
 
-Keep a machine-readable copy of the user's Naver Dictionary personal wordbook synchronized with Abel without storing Naver credentials in GitHub.
+## Multi-wordbook model
 
-## Security model
+Naver wordbooks are **not flattened** into one category. Abel preserves each wordbook and the many-to-many relationship between wordbooks and words.
 
-The Naver login is performed once in a persistent Chromium profile on the user's Mac. The password is never read by Abel and the profile must never be committed.
+Examples:
+- 단어장
+- Netflix 저장 단어장
+- 대만 여행
+- HSK 5급
+- HSK 6급
 
-GitHub Actions runs on a self-hosted Mac runner. This is deliberate: a GitHub-hosted runner would not have the user's persistent authenticated browser session.
+A word may belong to multiple wordbooks. Global word records are deduplicated while membership is preserved.
 
-## First run
+## Local data
 
-    cd ~/abel
-    python3 -m venv .venv
-    source .venv/bin/activate
-    pip install playwright
-    python -m playwright install chromium
-    python scripts/naver_wordbook_sync.py --bootstrap
+- Authenticated Chromium profile: `~/.naver_wordbook/browser_profile`
+- Raw probe/sync snapshots: `~/.naver_wordbook/exports/`
+- SQLite: `~/.naver_wordbook/naver_wordbook.sqlite3`
+- Repository export: `data/naver_wordbook.json`
 
-During bootstrap, log in to Naver and open the personal wordbook until its entries are visible, then press Enter.
+Never commit the browser profile or cookies.
 
-After login:
+## Schema
 
-    python scripts/naver_wordbook_sync.py --probe
+### wordbooks
+Stable/discovered Naver wordbook metadata.
 
-Probe mode records DOM cards and relevant JSON/network responses under ~/.naver_wordbook/exports/. This verifies the current Naver SPA structure before scheduled synchronization.
+### words
+Globally deduplicated word records.
 
-## Normal synchronization
+### wordbook_words
+Many-to-many membership between a word and a wordbook.
 
-    python scripts/naver_wordbook_sync.py --sync
+This lets downstream code query HSK 6 only, Netflix only, Taiwan travel only, HSK 5 ∩ HSK 6, or duplicate words across books without losing provenance.
 
-The canonical repository export is data/naver_wordbook.json.
+## Workflow
 
-Local persistence is ~/.naver_wordbook/naver_wordbook.sqlite3.
-
-## GitHub Actions
-
-The workflow uses a self-hosted runner with labels:
-
-- self-hosted
-- macOS
-- naver-wordbook
+The GitHub Actions workflow runs on a self-hosted Mac runner. The runner must have labels `self-hosted`, `macOS`, and `naver-wordbook`. GitHub supports custom runner labels and matches all requested labels cumulatively. citeturn0search0turn0search2
 
 Schedule: 07:00 and 19:00 KST.
 
-Manual dispatch supports sync and probe.
+## First run
 
-## Data design
+```bash
+cd ~/abel
+python3 -m venv .venv
+source .venv/bin/activate
+pip install playwright
+python -m playwright install chromium
+python scripts/naver_wordbook_sync.py --bootstrap
+python scripts/naver_wordbook_sync.py --probe
+```
 
-Raw capture is retained separately from normalized fields. The normalized record is designed to support later enrichment without overwriting source data:
-
-- word
-- meaning
-- pronunciation
-- part of speech
-- example
-- wordbook
-- source URL
-- first_seen
-- last_seen
-- raw source
+Probe output is intentionally retained before production sync so the current Naver SPA/API structure can be hardened without losing evidence.
