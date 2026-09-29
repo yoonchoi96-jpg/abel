@@ -55,6 +55,7 @@ SEED_WORDBOOKS = [
 ]
 DATA_ROOT = Path(os.environ.get("NAVER_WORDBOOK_DATA", "~/.naver_wordbook")).expanduser()
 PROFILE_DIR = DATA_ROOT / "browser_profile"
+BROWSER_CHANNEL = os.environ.get("NAVER_BROWSER", "chrome").strip().lower()
 EXPORT_DIR = DATA_ROOT / "exports"
 DB_PATH = DATA_ROOT / "naver_wordbook.sqlite3"
 REPO_EXPORT = Path(os.environ.get("NAVER_WORDBOOK_EXPORT", "data/naver_wordbook.json"))
@@ -214,6 +215,43 @@ def attr(el, name):
     except Exception:
         return ""
 
+def normalize_wordbook_name(name: str) -> str:
+    """Collapse HSK numbered volumes into the user's requested collections."""
+    name = (name or "").strip()
+    if re.fullmatch(r"신HSK[_ ]?5급(?:[ _]필수단어)?[ _]\d+탄", name):
+        return "신HSK 5급"
+    if re.fullmatch(r"신HSK[_ ]?6급(?:[ _]필수단어)?[ _]\d+탄", name):
+        return "신HSK 6급"
+    return name
+
+def expand_wordbook_manager(page) -> dict:
+    """Open Naver's authenticated wordbook chooser/manager and return diagnostics."""
+    diagnostics = {"clicked": [], "visible_text": "", "url": page.url}
+    candidates = [
+        page.get_by_text("중국어단어장", exact=True),
+        page.locator("a,button,[role='button']").filter(has_text="중국어단어장"),
+    ]
+    for loc in candidates:
+        try:
+            for i in range(min(loc.count(), 5)):
+                el = loc.nth(i)
+                if not el.is_visible():
+                    continue
+                el.click(timeout=3000)
+                page.wait_for_timeout(1200)
+                diagnostics["clicked"].append("중국어단어장")
+                break
+            if diagnostics["clicked"]:
+                break
+        except Exception:
+            continue
+    try:
+        diagnostics["visible_text"] = page.locator("body").inner_text(timeout=3000)[:50000]
+    except Exception:
+        pass
+    diagnostics["url_after"] = page.url
+    return diagnostics
+
 def discover_wordbooks(page) -> list[dict]:
     found = {}
 
@@ -248,6 +286,25 @@ def discover_wordbooks(page) -> list[dict]:
             add(text, href, m.group(1) if m else "", text)
     except Exception:
         pass
+
+    # The private wordbook list is often loaded only after opening the
+    # authenticated "중국어단어장" chooser. Do this before falling back to DOM
+    # selectors so opaque wbIds are discovered rather than guessed.
+    expand_wordbook_manager(page)
+    for selector in ["a[href*='wbId=']", "a[href*='#/my/cards']", "[data-wb-id]", "[data-wordbook-id]", "[data-wordbookid]"]:
+        try:
+            loc = page.locator(selector)
+            for i in range(min(loc.count(), 3000)):
+                el = loc.nth(i)
+                if not el.is_visible():
+                    continue
+                href = attr(el, "href")
+                text = visible_text(el)
+                data_id = attr(el, "data-wb-id") or attr(el, "data-wordbook-id") or attr(el, "data-wordbookid")
+                m = re.search(r"[?&]wbId=([^&#]+)", href)
+                add(text, href, data_id or (m.group(1) if m else ""), text)
+        except Exception:
+            pass
 
     # Older UI used #main_folder. Extract the folder label and clickable href/id
     # without depending on one exact CSS implementation.
@@ -293,11 +350,6 @@ def discover_wordbooks(page) -> list[dict]:
         q = parse_qs(urlparse(page.url).query)
         current_name = unquote(q.get("name", [START_WB_NAME])[0]) or START_WB_NAME
         add(current_name, page.url, m.group(1), current_name)
-
-    # Add authenticated-session wordbooks that were explicitly identified by the user.
-    # This is deliberately limited to stable wbId URLs; no private wordbook is guessed.
-    for wb in SEED_WORDBOOKS:
-        found[wb["naver_id"]] = dict(wb, href=wb["source_url"], raw_text=wb["name"])
 
     # Never fabricate a private wordbook from recommendation text.
     return list(found.values())
@@ -477,10 +529,6 @@ def collect(page) -> tuple[list[dict], list[dict], list[dict]]:
         visited.add(identity)
         all_cards.extend(collect_wordbook(page, wb))
 
-    # If folder discovery failed, still parse the main page once.
-    if not all_cards:
-        fallback = {"naver_id": "", "name": "단어장", "source_url": page.url}
-        all_cards.extend(collect_wordbook(page, fallback))
 
     dedup = {}
     for c in all_cards:
@@ -575,10 +623,13 @@ def run(mode):
     ensure_dirs()
     init_db()
     with sync_playwright() as p:
-        browser = p.chromium.launch_persistent_context(
-            str(PROFILE_DIR), headless=(mode != "bootstrap"),
-            viewport={"width":1440,"height":1000},
-        )
+        launch_kwargs = {
+            "headless": (mode != "bootstrap"),
+            "viewport": {"width": 1440, "height": 1000},
+        }
+        if BROWSER_CHANNEL in {"chrome", "msedge", "chrome-beta", "chrome-dev"}:
+            launch_kwargs["channel"] = BROWSER_CHANNEL
+        browser = p.chromium.launch_persistent_context(str(PROFILE_DIR), **launch_kwargs)
         page = browser.pages[0] if browser.pages else browser.new_page()
         try:
             if mode == "bootstrap":
