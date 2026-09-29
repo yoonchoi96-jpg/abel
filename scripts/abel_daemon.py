@@ -18,6 +18,8 @@ OUT = Path.home() / ".naver_wordbook" / "exports" / "abel_classified.json"
 POLL_SECONDS = 3
 DEBOUNCE_SECONDS = 8
 NAVER_SYNC_INTERVAL = 300  # seconds; browser sync, no AI/API calls
+GIT_SYNC_INTERVAL = 600
+PUSH_EXPORT = False  # personal Naver data is never pushed by default
 LOCK = Path.home() / ".naver_wordbook" / ".abel_daemon.lock"
 
 def now():
@@ -125,6 +127,21 @@ def run_naver_sync():
         print("[naver] sync exception: " + str(e), flush=True)
         return False
 
+def git_sync():
+    if not PUSH_EXPORT:
+        return
+    try:
+        subprocess.run(["git","add",str(OUT)], cwd=ROOT, check=True, timeout=30)
+        changed = subprocess.run(["git","diff","--cached","--quiet"], cwd=ROOT, timeout=30).returncode != 0
+        if not changed:
+            return
+        subprocess.run(["git","commit","-m","chore: sync local Naver wordbook classification"], cwd=ROOT, check=True, timeout=30)
+        subprocess.run(["git","pull","--rebase","origin","main"], cwd=ROOT, check=True, timeout=120)
+        subprocess.run(["git","push","origin","main"], cwd=ROOT, check=True, timeout=120)
+        print("[git] export pushed", flush=True)
+    except Exception as e:
+        print("[git] sync skipped/failed: " + str(e), flush=True)
+
 def main():
     DB.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -137,12 +154,16 @@ def main():
     pending_since = None
     last_version = None
     last_naver_sync = 0.0
+    last_git_sync = 0.0
     try:
         while True:
             if time.monotonic() - last_naver_sync >= NAVER_SYNC_INTERVAL:
                 if run_naver_sync():
                     last_naver_sync = time.monotonic()
                     pending_since = time.monotonic()
+            if time.monotonic() - last_git_sync >= GIT_SYNC_INTERVAL:
+                git_sync()
+                last_git_sync = time.monotonic()
             try:
                 version = data_version()
             except sqlite3.Error as e:
