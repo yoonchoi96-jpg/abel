@@ -17,6 +17,7 @@ DB = Path.home() / ".naver_wordbook" / "naver_wordbook.sqlite3"
 OUT = Path.home() / ".naver_wordbook" / "exports" / "abel_classified.json"
 POLL_SECONDS = 3
 DEBOUNCE_SECONDS = 8
+NAVER_SYNC_INTERVAL = 300  # seconds; browser sync, no AI/API calls
 LOCK = Path.home() / ".naver_wordbook" / ".abel_daemon.lock"
 
 def now():
@@ -109,6 +110,21 @@ def data_version():
     with sqlite3.connect(DB) as db:
         return db.execute("PRAGMA data_version").fetchone()[0]
 
+def run_naver_sync():
+    script = ROOT / "scripts" / "naver_wordbook_sync.py"
+    try:
+        p = subprocess.run(
+            ["python3", str(script), "--sync"],
+            cwd=ROOT, text=True, capture_output=True, timeout=240,
+        )
+        print(p.stdout[-4000:], end="", flush=True)
+        if p.returncode != 0:
+            print("[naver] sync failed: " + p.stderr[-2000:], flush=True)
+        return p.returncode == 0
+    except Exception as e:
+        print("[naver] sync exception: " + str(e), flush=True)
+        return False
+
 def main():
     DB.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -120,8 +136,13 @@ def main():
     print("API calls: 0")
     pending_since = None
     last_version = None
+    last_naver_sync = 0.0
     try:
         while True:
+            if time.monotonic() - last_naver_sync >= NAVER_SYNC_INTERVAL:
+                if run_naver_sync():
+                    last_naver_sync = time.monotonic()
+                    pending_since = time.monotonic()
             try:
                 version = data_version()
             except sqlite3.Error as e:
