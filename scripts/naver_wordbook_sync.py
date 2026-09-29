@@ -354,6 +354,67 @@ def discover_wordbooks(page) -> list[dict]:
     # Never fabricate a private wordbook from recommendation text.
     return list(found.values())
 
+def discover_wordbooks_from_network(network: list[dict], page) -> list[dict]:
+    """Recover private wordbook IDs/names from authenticated XHR/fetch payloads."""
+    found = {}
+    def add(name, nid):
+        name = normalize_wordbook_name(name)
+        nid = (nid or "").strip()
+        if not nid:
+            return
+        if not (name and ("HSK" in name.upper() or "단어" in name or "旅行" in name or "투투" in name)):
+            return
+        found[nid] = {
+            "naver_id": nid,
+            "name": name,
+            "source_url": page_url_for_wordbook(nid, name),
+            "raw_text": name,
+        }
+
+    def walk(v):
+        if isinstance(v, dict):
+            nid = ""
+            name = ""
+            for k, value in v.items():
+                lk = str(k).lower()
+                if lk in {"wbid", "wordbookid", "wordbook_id", "folderid", "folder_id"} and isinstance(value, (str, int)):
+                    nid = str(value)
+                if lk in {"name", "title", "wordbookname", "wordbook_name", "foldername", "folder_name"} and isinstance(value, str):
+                    name = value
+            if nid and name:
+                add(name, nid)
+            for value in v.values():
+                walk(value)
+        elif isinstance(v, list):
+            for value in v:
+                walk(value)
+
+    for event in network or []:
+        body = event.get("body", "")
+        if not body:
+            continue
+        parsed = safe_json(body)
+        if parsed is not None:
+            walk(parsed)
+        for m in re.finditer(r"(신HSK[_ ]?[56]급(?:[_ ]?필수단어)?[_ ]?\\d+탄|台湾旅行|투투|내가 찾은 단어)", body):
+            name = m.group(1)
+            window = body[max(0, m.start()-800):m.end()+800]
+            ids = re.findall(r"(?:wbId|wordbookId|wordbook_id|folderId)[\"'\\s:=]+([A-Za-z0-9_-]{16,64})", window, flags=re.I)
+            for nid in ids:
+                add(name, nid)
+    return list(found.values())
+
+def page_url_for_wordbook(nid: str, name: str) -> str:
+    from urllib.parse import quote
+    return (
+        NAVER_DICT_BASE
+        + "#/my/cards?wbId="
+        + quote(nid, safe="")
+        + "&qt=0&st=0&name="
+        + quote(name, safe="")
+        + "&tab=list&page=1"
+    )
+
 def extract_cards(page, wordbook: dict) -> list[dict]:
     selectors = [
         ".card_word",
@@ -517,6 +578,11 @@ def collect(page) -> tuple[list[dict], list[dict], list[dict]]:
     scroll_settle(page)
 
     wordbooks = discover_wordbooks(page)
+    network_wordbooks = discover_wordbooks_from_network(network, page)
+    merged = {(w.get("naver_id") or w.get("name")): w for w in wordbooks}
+    for wb in network_wordbooks:
+        merged[wb.get("naver_id") or wb.get("name")] = wb
+    wordbooks = list(merged.values())
     all_cards = []
     visited = set()
 
