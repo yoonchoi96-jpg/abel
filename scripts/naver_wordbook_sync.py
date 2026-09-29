@@ -848,6 +848,7 @@ def write_repo_export(cards, wordbooks, snapshot_path):
 
 # Playwright is imported lazily inside browser-dependent code so stdlib-only jobs can reuse the SQLite helpers.
 def run(mode):
+    from playwright.sync_api import sync_playwright
     ensure_dirs()
     init_db()
     with sync_playwright() as p:
