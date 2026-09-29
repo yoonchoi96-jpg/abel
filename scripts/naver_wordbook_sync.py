@@ -19,14 +19,17 @@ from urllib.parse import urljoin
 
 from playwright.sync_api import sync_playwright
 
-DEFAULT_URL = "https://learn.dict.naver.com/wordbook/enkodict/#/my/main"
+DEFAULT_URL = "https://learn.dict.naver.com/wordbook/zhkodict/#/my/cards?wbId=9e2a3d82c347453d87a1013aa9f5ee8f&qt=0&st=0&name=%EB%82%B4%EA%B0%80%20%EC%B0%BE%EC%9D%80%20%EB%8B%A8%EC%96%B4&tab=list&page=1"
+NAVER_DICT_BASE = "https://learn.dict.naver.com/wordbook/zhkodict/"
+START_WB_ID = "9e2a3d82c347453d87a1013aa9f5ee8f"
+START_WB_NAME = "내가 찾은 단어"
 DATA_ROOT = Path(os.environ.get("NAVER_WORDBOOK_DATA", "~/.naver_wordbook")).expanduser()
 PROFILE_DIR = DATA_ROOT / "browser_profile"
 EXPORT_DIR = DATA_ROOT / "exports"
 DB_PATH = DATA_ROOT / "naver_wordbook.sqlite3"
 REPO_EXPORT = Path(os.environ.get("NAVER_WORDBOOK_EXPORT", "data/naver_wordbook.json"))
 
-NETWORK_HINTS = ("wordbook", "dict.naver", "learn.dict")
+NETWORK_HINTS = ("wordbook", "dict.naver", "learn.dict", "/api/", "/ajax/", "api.", "ajax.")
 MAX_RESPONSE = 2_000_000
 
 def now_iso() -> str:
@@ -144,7 +147,12 @@ def capture_network(page):
     events = []
     def on_response(response):
         url = response.url
-        if not any(h in url.lower() for h in NETWORK_HINTS):
+        resource_type = ""
+        try:
+            resource_type = response.request.resource_type or ""
+        except Exception:
+            pass
+        if resource_type not in ("xhr", "fetch") and not any(h in url.lower() for h in NETWORK_HINTS):
             return
         try:
             ctype = (response.headers.get("content-type") or "").lower()
@@ -199,7 +207,7 @@ def discover_wordbooks(page) -> list[dict]:
 
     # Current/legacy Naver wordbook URLs expose the stable wbId in the hash.
     try:
-        anchors = page.locator("a[href*='wbId=']")
+        anchors = page.locator("a[href*='wbId='], a[href*='#/my/cards']")
         for i in range(min(anchors.count(), 1000)):
             el = anchors.nth(i)
             if not el.is_visible():
@@ -249,9 +257,14 @@ def discover_wordbooks(page) -> list[dict]:
         except Exception:
             continue
 
-    if not found:
-        add("단어장", "", "", "fallback")
+    m = re.search(r"[?&]wbId=([^&#]+)", page.url)
+    if m:
+        from urllib.parse import parse_qs, urlparse, unquote
+        q = parse_qs(urlparse(page.url).query)
+        current_name = unquote(q.get("name", [START_WB_NAME])[0]) or START_WB_NAME
+        add(current_name, page.url, m.group(1), current_name)
 
+    # Never fabricate a private wordbook from recommendation text.
     return list(found.values())
 
 def extract_cards(page, wordbook: dict) -> list[dict]:
@@ -261,6 +274,10 @@ def extract_cards(page, wordbook: dict) -> list[dict]:
         ".inner_card",
         "[class*='card_word']",
         "[class*='inner_card']",
+        "[class*='word_card']",
+        "[class*='WordCard']",
+        "[class*='card']",
+        "li[class*='word']",
     ]
     cards, seen = [], set()
     for selector in selectors:
@@ -496,7 +513,7 @@ def run(mode):
         try:
             if mode == "bootstrap":
                 page.goto(DEFAULT_URL, wait_until="domcontentloaded", timeout=60_000)
-                print("\nNAVER 로그인 → 모든 개인 단어장이 보이는 화면까지 이동 → ENTER.")
+                print("\nNAVER 로그인 → 실제 중국어 개인 단어장이 보이는 화면까지 이동 → ENTER.")
                 input()
                 cards, wordbooks, network = collect(page)
             else:
