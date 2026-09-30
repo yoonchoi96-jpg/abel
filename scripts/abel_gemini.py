@@ -17,9 +17,16 @@ def parse_json(s):
     s=s.strip()
     if s.startswith('```'): s='\n'.join(s.splitlines()[1:-1]).strip()
     return json.loads(s)
-def call(w):
+def get_key():
     key=os.environ.get('GEMINI_API_KEY')
-    if not key: raise RuntimeError('GEMINI_API_KEY is not set')
+    if key: return key
+    p=HOME/'.naver_wordbook'/'gemini_api_key'
+    if p.exists(): return p.read_text(encoding='utf-8').strip() or None
+    return None
+
+def call(w):
+    key=get_key()
+    if not key: raise RuntimeError('Gemini API key is not configured')
     prompt=f'''{SYSTEM}\n\nCreate one high-quality Chinese-learning card. Use supplied facts; do not fabricate. Korean explanations, Chinese examples. Give 4–6 collocations, 3 examples of increasing difficulty, and one unambiguous 4-choice quiz. Contrast only genuinely useful near-synonyms.\n\nSOURCE\nword: {w.get('word','')}\nhsk_band: {w.get('hsk_band','미매칭')}\npinyin: {w.get('pronunciation','')}\npart_of_speech: {w.get('part_of_speech','')}\nnaver_meaning: {w.get('meaning','')}\nnaver_example: {w.get('example','')}\n\nJSON SCHEMA\n{SCHEMA}'''
     body={'systemInstruction':{'parts':[{'text':SYSTEM}]},'contents':[{'parts':[{'text':prompt}]}],'generationConfig':{'temperature':0.35,'maxOutputTokens':1800,'responseMimeType':'application/json'}}
     req=urllib.request.Request(URL.format(model=MODEL),data=json.dumps(body,ensure_ascii=False).encode(),headers={'Content-Type':'application/json','x-goog-api-key':key},method='POST')
@@ -31,7 +38,7 @@ def main():
     targets=[w for w in words if w.get('word')==a.word] if a.word else [w for w in words if str(w.get('id')) not in done][:a.limit if not a.all else None]
     print(f'[gemini] model={MODEL} targets={len(targets)}')
     if a.dry_run: [print(w.get('word'),'|',w.get('hsk_band')) for w in targets]; return
-    if not os.environ.get('GEMINI_API_KEY'): print('[gemini] GEMINI_API_KEY is not set; nothing sent.'); return
+    if not get_key(): print('[gemini] Gemini API key is not configured; nothing sent.'); return
     for w in targets:
         try: items.append({'word_id':w.get('id'),'word':w.get('word'),'hsk_band':w.get('hsk_band'),'generated_at':now(),'model':MODEL,'education':call(w)}); print('[ok]',w.get('word'))
         except (urllib.error.HTTPError,urllib.error.URLError,KeyError,ValueError,RuntimeError) as e: print('[error]',w.get('word'),e)
