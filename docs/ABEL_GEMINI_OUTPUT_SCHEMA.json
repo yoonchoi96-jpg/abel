@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Abel Chinese Education Batch",
+  "type": "object",
+  "required": ["schema_version","batch_id","processed_at","engine","items"],
+  "properties": {
+    "schema_version": {"const": "abel.education.v1"},
+    "batch_id": {"type": "string", "minLength": 1},
+    "processed_at": {"type": "string"},
+    "engine": {"const": "Abel Chinese Education Engine"},
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["word_id","word","education"],
+        "properties": {
+          "word_id": {"type": ["integer","string"]},
+          "word": {"type": "string"},
+          "education": {"type": "object"}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
