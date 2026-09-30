@@ -20,6 +20,7 @@ DEBOUNCE_SECONDS = 8
 NAVER_SYNC_INTERVAL = 300  # seconds; browser sync, no AI/API calls
 GIT_SYNC_INTERVAL = 600
 PUSH_EXPORT = False  # personal Naver data is never pushed by default
+HSK_CACHE = ROOT / 'data' / 'hsk30_match_cache.json'
 LOCK = Path.home() / ".naver_wordbook" / ".abel_daemon.lock"
 
 def now():
@@ -36,42 +37,54 @@ def ensure_schema(db):
     db.execute("CREATE INDEX IF NOT EXISTS idx_abel_class_hsk ON abel_classifications(hsk_band)")
     db.commit()
 
+def load_hsk_index():
+    idx = {}
+    import csv
+    for filename, band in [
+        ("hsk30_level6_1140.csv", "HSK 3.0 6급"),
+        ("hsk30_level7_9_5600.csv", "HSK 3.0 7–9급"),
+    ]:
+        path = ROOT / "data" / filename
+        if not path.exists():
+            continue
+        with path.open(encoding="utf-8", newline="") as fh:
+            for row in csv.DictReader(fh):
+                word = (row.get("word") or "").strip()
+                if word:
+                    idx.setdefault(word, []).append({
+                        "band": band,
+                        "meaning_ko": (row.get("meaning_ko") or "").strip(),
+                        "pinyin": (row.get("pinyin") or "").strip(),
+                        "pos": (row.get("pos") or "").strip(),
+                    })
+    return idx
+
 def classify_and_export():
     with sqlite3.connect(DB) as db:
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys=ON")
         ensure_schema(db)
         # Exact Chinese-word matching is deterministic and API-free.
-        db.execute("""
-            INSERT INTO abel_classifications(word_id,hsk_band,hsk_word,matched_at)
-            SELECT w.id,
-                   CASE
-                     WHEN EXISTS (
-                       SELECT 1 FROM wordbook_words ww
-                       JOIN wordbooks wb ON wb.id=ww.wordbook_id
-                       WHERE ww.word_id=w.id AND wb.name='HSK 3.0 7–9급'
-                     ) THEN 'HSK 3.0 7–9급'
-                     WHEN EXISTS (
-                       SELECT 1 FROM wordbook_words ww
-                       JOIN wordbooks wb ON wb.id=ww.wordbook_id
-                       WHERE ww.word_id=w.id AND wb.name='HSK 3.0 6급'
-                     ) THEN 'HSK 3.0 6급'
-                     ELSE NULL
-                   END,
-                   w.word,
-                   ? 
+        hsk = load_hsk_index()
+        user_rows = db.execute("""
+            SELECT DISTINCT w.id,w.word
             FROM words w
-            WHERE EXISTS (
-              SELECT 1 FROM wordbook_words ww
-              JOIN wordbooks wb ON wb.id=ww.wordbook_id
-              WHERE ww.word_id=w.id
-                AND wb.name NOT LIKE 'HSK 3.0 %'
-            )
-            ON CONFLICT(word_id) DO UPDATE SET
-              hsk_band=excluded.hsk_band,
-              hsk_word=excluded.hsk_word,
-              matched_at=excluded.matched_at
-        """, (now(),))
+            JOIN wordbook_words ww ON ww.word_id=w.id
+            JOIN wordbooks wb ON wb.id=ww.wordbook_id
+            WHERE wb.name NOT LIKE 'HSK 3.0 %'
+        """).fetchall()
+        for r in user_rows:
+            candidates = hsk.get((r["word"] or "").strip(), [])
+            band = candidates[-1]["band"] if candidates else None
+            db.execute("""
+                INSERT INTO abel_classifications(word_id,hsk_band,hsk_word,matched_at)
+                VALUES(?,?,?,?)
+                ON CONFLICT(word_id) DO UPDATE SET
+                  hsk_band=excluded.hsk_band,
+                  hsk_word=excluded.hsk_word,
+                  matched_at=excluded.matched_at
+            """, (r["id"], band, r["word"], now()))
+
 
         rows = db.execute("""
             SELECT w.id,w.word,w.meaning,w.pronunciation,w.part_of_speech,w.example,
