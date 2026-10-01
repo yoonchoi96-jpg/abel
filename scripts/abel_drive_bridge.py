@@ -27,11 +27,21 @@ def root():
     configured = os.environ.get("ABEL_DRIVE_DIR")
     if configured:
         return Path(configured).expanduser()
+
     cloud = HOME / "Library/CloudStorage"
-    candidates = sorted(cloud.glob("GoogleDrive-*/My Drive")) if cloud.exists() else []
-    if candidates:
-        return candidates[0] / "Abel"
-    raise SystemExit("Set ABEL_DRIVE_DIR to your local Google Drive/Abel folder")
+    if cloud.exists():
+        candidates = []
+        for drive in sorted(cloud.glob("GoogleDrive-*")):
+            for drive_name in ("My Drive", "내 드라이브"):
+                candidate = drive / drive_name
+                if candidate.is_dir():
+                    candidates.append(candidate)
+        if candidates:
+            return candidates[0] / "Abel"
+
+    raise SystemExit(
+        "Set ABEL_DRIVE_DIR to your local Google Drive/Abel folder"
+    )
 
 
 def read_json(path, default):
