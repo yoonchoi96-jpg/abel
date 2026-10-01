@@ -8,3 +8,12 @@ __pycache__/
 .navery/
 .browser/
 naver_wordbook_profile/
+
+# Local/private Abel state
+data/naver_wordbook.json
+*.sqlite3
+*.db
+*.sqlite
+.navery/
+.browser/
+naver_wordbook_profile/
