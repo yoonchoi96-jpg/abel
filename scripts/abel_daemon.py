@@ -39,6 +39,16 @@ def normalize_word(value):
     return unicodedata.normalize("NFKC", (value or "").strip())
 
 
+def is_source_noise(word, meaning=""):
+    """Detect obvious Naver UI text accidentally scraped as a word."""
+    import re
+    value = normalize_word(word)
+    meaning = normalize_word(meaning)
+    if value == "폴더이동" or value.startswith("저장"):
+        return True
+    return bool(re.fullmatch(r"\d{1,2}\.\d{1,2}\s+저장", value))
+
+
 def ensure_schema(db):
     db.execute("""CREATE TABLE IF NOT EXISTS abel_classifications (
         word_id INTEGER PRIMARY KEY,
@@ -160,12 +170,34 @@ def classify_and_export():
             ORDER BY w.word COLLATE NOCASE
         """).fetchall()
 
+        # Export unique learner words only; Naver can retain duplicate rows.
+        unique = {}
+        for row in rows:
+            if is_source_noise(row["word"], row["meaning"]):
+                continue
+            key = normalize_word(row["word"])
+            if not key:
+                continue
+            if key not in unique:
+                unique[key] = row
+            else:
+                existing = unique[key]
+                merged_books = sorted(set(
+                    (existing["wordbooks"] or "").split(",")
+                    + (row["wordbooks"] or "").split(",")
+                ))
+                merged = dict(existing)
+                merged["wordbooks"] = ",".join(x for x in merged_books if x)
+                unique[key] = merged
+
+        export_rows = list(unique.values())
+
         payload = {
             "schema_version": 1,
             "updated_at": now(),
             "source": "local Naver Wordbook SQLite",
             "api_calls": 0,
-            "count": len(rows),
+            "count": len(export_rows),
             "words": [
                 {
                     "id": row["id"],
@@ -177,7 +209,7 @@ def classify_and_export():
                     "wordbooks": (row["wordbooks"] or "").split(",") if row["wordbooks"] else [],
                     "hsk_band": row["hsk_band"],
                 }
-                for row in rows
+                for row in export_rows
             ],
         }
 
