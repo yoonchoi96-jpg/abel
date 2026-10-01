@@ -124,6 +124,15 @@ def classify_and_export():
             JOIN wordbooks wb ON wb.id = ww.wordbook_id
             WHERE wb.name NOT LIKE 'HSK 3.0 %'
         """).fetchall()
+        active_ids = {row["id"] for row in user_rows}
+        if active_ids:
+            placeholders = ",".join("?" for _ in active_ids)
+            db.execute(
+                f"DELETE FROM abel_classifications WHERE word_id NOT IN ({placeholders})",
+                tuple(active_ids),
+            )
+        else:
+            db.execute("DELETE FROM abel_classifications")
 
         for row in user_rows:
             candidates = hsk.get(normalize_word(row["word"]), [])
