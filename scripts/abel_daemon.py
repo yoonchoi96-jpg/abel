@@ -189,8 +189,11 @@ def classify_and_export():
 
 
 def data_version():
-    with sqlite3.connect(DB) as db:
-        return db.execute("PRAGMA data_version").fetchone()[0]
+    """Return the SQLite file modification signature used by the watcher."""
+    try:
+        return DB.stat().st_mtime_ns
+    except FileNotFoundError:
+        return None
 
 
 def run_naver_sync():
