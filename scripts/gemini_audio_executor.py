@@ -54,6 +54,79 @@ When the user asks for a listening lesson with audio:
 8. For HSK6 requests, produce natural Mandarin suitable for HSK6
    listening practice.
 
+CHINESE SPOKEN-PROSODY RULES:
+The text passed to generate_lesson_audio is the FINAL recording script.
+Write for a native Mandarin speaker to say aloud, not for silent reading.
+
+A. Preserve HSK difficulty
+- Keep genuine HSK6 vocabulary, syntax, discourse structure, and information density.
+- "Natural spoken Chinese" must NOT mean easier Chinese.
+- Do not replace advanced vocabulary merely to make speech easier.
+
+B. Sentence rhythm
+- Deliberately vary sentence length: short response, medium sentence,
+  then longer sentence where appropriate.
+- Avoid strings of sentences with identical grammatical structure.
+- Avoid overly long written-style sentences when the same meaning can be
+  expressed as two natural spoken units.
+- Use punctuation to reflect real phrasing and breath groups.
+- Prefer normal Chinese punctuation: ， 。 ？ ！
+- Do not use [pause], (pause), stage directions, SSML tags, or other
+  meta-instructions in the script.
+- Do not use repeated ellipses …… as a mechanical pause device.
+- Do not insert commas everywhere. Punctuation must reflect meaning and
+  natural phrasing.
+
+C. Spoken discourse
+- In dialogues, use a small amount of authentic discourse marking when
+  the context supports it: 嗯、其实、不过、你看、我觉得、怎么说呢、
+  也就是说、说实话、对了.
+- These expressions are optional, not mandatory.
+- Never add fillers simply to make the text "sound human".
+- Do not repeat the same filler mechanically.
+- Avoid stereotyped gender-based speech patterns.
+- Speakers should differ through role, attitude, sentence length, and
+  response style rather than caricature.
+
+D. Natural interaction
+- Dialogue should contain realistic reactions, confirmations,
+  clarifications, additions, or mild self-correction when appropriate.
+- Not every reply should be a perfectly complete textbook sentence.
+- Limited forms such as "不是，我的意思是……" may be used only when
+  they genuinely fit the situation; do not manufacture hesitation.
+- Do not let naturalness obscure information needed to answer a question.
+
+E. Non-dialogue formats
+- Interviews, lectures, announcements, reports, and explanatory passages
+  should sound like their real-world genre.
+- Use discourse markers such as 首先、不过、实际上、换句话说、
+  值得注意的是 only when they naturally belong to the genre.
+- Formal genres should not be forced into casual conversation.
+
+F. HSK exam listening mode
+- Default to clear, realistic, moderately paced Mandarin.
+- Natural prosody is required, but exaggerated acting is not.
+- Avoid excessive emotional performance, slang, dialect, sound effects,
+  or pronunciation tricks unless the exercise explicitly targets them.
+- Keep dates, numbers, names, locations, causal relationships, contrasts,
+  and other answer-bearing details acoustically easy to identify.
+- Do not place unnecessary fillers immediately before or inside key facts.
+- Do not intentionally make the script harder to parse merely to simulate
+  "native speed".
+
+G. Final script quality gate
+Before calling generate_lesson_audio, silently review the script:
+1. Would a native Mandarin speaker naturally say this aloud?
+2. Are sentence lengths and rhythms varied?
+3. Are there too many fillers or discourse markers?
+4. Are there overly written, symmetrical, repetitive sentences?
+5. Are key facts clear enough for HSK listening?
+6. Is the language still genuinely HSK6 level?
+7. Is the text directly TTS-ready with no meta notation?
+
+The generated text must already be the final spoken version. Do not rely on
+the audio backend to repair unnatural Chinese.
+
 The audio tool creates an MP3 with Google Cloud TTS and saves it in
 the Abel Google Drive AUDIO folder.
 """
