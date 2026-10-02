@@ -3,12 +3,13 @@
 
 Gemini decides when to call generate_lesson_audio.
 This script executes that function locally and forwards the lesson
-to the already-deployed Abel Google Apps Script TTS endpoint.
+to the Abel Google Apps Script TTS endpoint.
 
 Required environment variables:
   GEMINI_API_KEY
 Optional:
   GEMINI_MODEL (default: gemini-3.8-flash)
+  ABEL_APPS_SCRIPT_URL (overrides the default Apps Script deployment URL)
 """
 
 from __future__ import annotations
@@ -24,10 +25,9 @@ import requests
 from google import genai
 
 
-APPS_SCRIPT_URL = (
-    "https://script.google.com/macros/s/"
-    "AKfycbyDPAMAbeZoyDOXI9VSHwQ-_DLqT4nA1ymiKi-LdrJNxozwKl240yu3Zz9f5WbDs18"
-    "/exec"
+APPS_SCRIPT_URL = os.getenv(
+    "ABEL_APPS_SCRIPT_URL",
+    "https://script.google.com/macros/s/AKfycbyDPAMAbeZoyDOXI9VSHwQ-_DLqT4nA1ymiKi-LdrJNxozwKl240yu3Zz9f5WbDs18/exec",
 )
 
 MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
@@ -48,7 +48,9 @@ When the user asks for a listening lesson with audio:
 5. Never merely print a payload instead of calling the tool.
 6. After the tool returns, report the result naturally and include the
    Google Drive file URL when one is returned.
-7. Use the current Korean date/time when date/time are not supplied.
+7. Do NOT invent a date or time. Unless the user explicitly requests a
+   specific date/time, omit date and time from the function call; the
+   executor will use the current Korean date/time automatically.
 8. For HSK6 requests, produce natural Mandarin suitable for HSK6
    listening practice.
 
@@ -78,11 +80,17 @@ GENERATE_LESSON_AUDIO = {
             },
             "date": {
                 "type": "string",
-                "description": "Session date, YYYY-MM-DD.",
+                "description": (
+                    "Optional session date YYYY-MM-DD. Only provide this "
+                    "when the user explicitly requests a specific date."
+                ),
             },
             "time": {
                 "type": "string",
-                "description": "Session time, HHMM.",
+                "description": (
+                    "Optional session time HHMM. Only provide this when "
+                    "the user explicitly requests a specific time."
+                ),
             },
             "title": {
                 "type": "string",
@@ -97,7 +105,7 @@ GENERATE_LESSON_AUDIO = {
                 "description": "Lesson topic.",
             },
         },
-        "required": ["action", "text", "date", "time"],
+        "required": ["action", "text"],
     },
 }
 
@@ -112,12 +120,15 @@ def call_apps_script(arguments: dict) -> dict:
     if not text:
         return {"status": "error", "message": "Missing lesson text."}
 
-    date, time = now_kst()
+    current_date, current_time = now_kst()
+
+    # Date/time are only accepted when explicitly supplied by the user
+    # through Gemini. Otherwise always use the current Korean time.
     payload = {
         "action": "generate-lesson-audio",
         "text": text,
-        "date": arguments.get("date") or date,
-        "time": arguments.get("time") or time,
+        "date": arguments.get("date") or current_date,
+        "time": arguments.get("time") or current_time,
         "title": arguments.get("title", ""),
         "level": arguments.get("level", ""),
         "topic": arguments.get("topic", ""),
