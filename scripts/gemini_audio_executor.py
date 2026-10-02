@@ -27,7 +27,7 @@ from google import genai
 
 APPS_SCRIPT_URL = os.getenv(
     "ABEL_APPS_SCRIPT_URL",
-    "https://script.google.com/macros/s/AKfycbyvAktNhyaMYU4yYf3tmxh85Kb9IeueCX-NVSqBzDM1u8hIHuEg7OwV6kEUVGbKAUgO/exec",
+    "https://script.google.com/macros/s/AKfycby2uN5ArGnOML3fHpEcP5X4wmMv8lsVgg1kuu8ZmRKwkUYvGxtj2tIDyf2FtyAgDdkA/exec",
 )
 
 MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
@@ -114,18 +114,44 @@ F. HSK exam listening mode
 - Do not intentionally make the script harder to parse merely to simulate
   "native speed".
 
-G. Final script quality gate
-Before calling generate_lesson_audio, silently review the script:
-1. Would a native Mandarin speaker naturally say this aloud?
-2. Are sentence lengths and rhythms varied?
-3. Are there too many fillers or discourse markers?
-4. Are there overly written, symmetrical, repetitive sentences?
-5. Are key facts clear enough for HSK listening?
-6. Is the language still genuinely HSK6 level?
-7. Is the text directly TTS-ready with no meta notation?
+G. Native-speaker rhythm pass
+Before calling generate_lesson_audio, silently rewrite the script once in your
+head as if you were a native Mandarin speaker preparing to record it.
+
+- Prefer natural information chunks rather than perfectly balanced written sentences.
+- Let sentence boundaries occur where a speaker would naturally complete a thought.
+- Use occasional short standalone sentences to reset rhythm.
+- Mix sentence openings and avoid repeated "主语 + 谓语 + 宾语" patterns.
+- In dialogue, allow concise replies, confirmations, and natural follow-ups instead
+  of making every turn equally polished.
+- In explanatory speech, connect ideas with natural transitions rather than stacking
+  formal written clauses.
+- Use commas only for meaningful phrasing; do not create a comma after every clause.
+- Avoid artificial "performance" cues. The punctuation must be ordinary Chinese prose.
+- Do not deliberately add pauses, fillers, slang, or hesitation just for realism.
+- Never weaken HSK6 vocabulary, syntax, inference, or information density.
+- Preserve every fact needed to answer the listening questions.
+
+H. TTS-specific quality gate
+Immediately before the tool call, verify:
+1. The first sentence does not sound like a written essay opening unless the genre requires it.
+2. Adjacent sentences do not share the same length and syntactic template repeatedly.
+3. There is a natural alternation of short, medium, and longer utterances.
+4. Dialogue turns are not uniformly long.
+5. Discourse markers are sparse and purposeful.
+6. Key dates, numbers, names, contrasts, causes, and conclusions remain isolated enough
+   to hear clearly.
+7. No SSML, stage directions, bracketed cues, mechanical ellipses, or meta commentary.
+8. The final text can be sent directly to TTS without any backend rewriting.
 
 The generated text must already be the final spoken version. Do not rely on
 the audio backend to repair unnatural Chinese.
+
+I. Do not over-naturalize
+Natural spoken Mandarin is not the same as casual chat.
+For lectures, interviews, reports, and exam-style passages, retain the appropriate
+register. Do not turn formal HSK6 material into social-media speech.
+Do not insert "嗯", "其实", "你看", etc. unless a real speaker would plausibly need them.
 
 The audio tool creates an MP3 with Google Cloud TTS and saves it in
 the Abel Google Drive AUDIO folder.
