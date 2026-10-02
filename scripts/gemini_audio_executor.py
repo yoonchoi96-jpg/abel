@@ -270,12 +270,141 @@ def call_apps_script(arguments: dict) -> dict:
         return {"status": "error", "message": f"HTTP request failed: {exc}"}
 
 
-def execute_function(name: str, arguments: dict) -> dict:
+
+SPEECH_QA_PROMPT = """
+You are the final Chinese spoken-language QA editor for an HSK6 listening lesson.
+
+Review the candidate script BEFORE it is sent to TTS.
+
+Check:
+- Genuine HSK6 vocabulary, syntax, inference, and information density remain intact.
+- Natural spoken Mandarin for the genre, not an essay being read aloud.
+- Varied sentence lengths and openings.
+- No repeated adjacent syntactic templates.
+- Natural meaning/chunk boundaries.
+- Dialogue turns vary in length and have realistic reactions when appropriate.
+- Discourse markers and fillers are sparse and purposeful.
+- Dates, numbers, names, contrasts, causes, and conclusions remain clear.
+- No SSML, stage directions, bracketed cues, meta-commentary, or mechanical ellipses.
+- Formal genres retain their register.
+- Advanced vocabulary is not simplified for TTS.
+
+Return ONLY valid JSON:
+{
+  "pass": true or false,
+  "score": 0-100,
+  "issues": ["short concrete issue", "..."],
+  "revised_text": "full final script if changes are needed, otherwise the original script"
+}
+
+PASS means ready for TTS, not merely grammatically correct.
+If score is below 88, set pass=false.
+If there is no meaningful problem, preserve the original script exactly.
+"""
+
+def review_script(client, script: str, title: str, level: str, topic: str) -> dict:
+    prompt = (
+        SPEECH_QA_PROMPT
+        + "\n\nTITLE: " + title
+        + "\nLEVEL: " + level
+        + "\nTOPIC: " + topic
+        + "\n\nCANDIDATE SCRIPT:\n" + script
+    )
+    review = client.interactions.create(model=MODEL, input=prompt)
+    raw = (review.output_text or "").strip()
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError:
+        return {
+            "pass": False,
+            "score": 0,
+            "issues": ["Speech QA returned invalid JSON."],
+            "revised_text": script,
+        }
+
+    if not isinstance(result, dict):
+        return {
+            "pass": False,
+            "score": 0,
+            "issues": ["Speech QA returned an invalid object."],
+            "revised_text": script,
+        }
+
+    result.setdefault("pass", False)
+    result.setdefault("score", 0)
+    result.setdefault("issues", [])
+    result.setdefault("revised_text", script)
+
+    if not str(result.get("revised_text") or "").strip():
+        result["revised_text"] = script
+    return result
+
+
+def prepare_audio_arguments(client, arguments: dict) -> tuple[dict, dict]:
+    prepared = dict(arguments)
+    script = (prepared.get("text") or "").strip()
+    if not script:
+        return prepared, {
+            "pass": False,
+            "score": 0,
+            "issues": ["Missing lesson text."],
+            "revised_text": "",
+        }
+
+    # One repair pass followed by one verification pass.
+    qa = review_script(
+        client, script,
+        str(prepared.get("title") or ""),
+        str(prepared.get("level") or ""),
+        str(prepared.get("topic") or ""),
+    )
+
+    if not qa.get("pass", False):
+        revised = str(qa.get("revised_text") or script).strip()
+        if revised and revised != script:
+            prepared["text"] = revised
+            qa2 = review_script(
+                client, revised,
+                str(prepared.get("title") or ""),
+                str(prepared.get("level") or ""),
+                str(prepared.get("topic") or ""),
+            )
+            if qa2.get("pass", False):
+                qa = qa2
+            else:
+                qa = {
+                    "pass": False,
+                    "score": qa2.get("score", 0),
+                    "issues": qa2.get("issues", []),
+                    "revised_text": revised,
+                }
+    return prepared, qa
+
+
+def execute_function(name: str, arguments: dict, client=None) -> dict:
     if name != "generate_lesson_audio":
         return {"status": "error", "message": f"Unknown function: {name}"}
 
     arguments = dict(arguments)
     arguments["action"] = "generate-lesson-audio"
+
+    if client is not None:
+        arguments, qa = prepare_audio_arguments(client, arguments)
+        print(
+            f"[ABEL] speech QA: score={qa.get('score')} pass={qa.get('pass')} "
+            f"issues={json.dumps(qa.get('issues', []), ensure_ascii=False)}",
+            file=sys.stderr,
+        )
+        if not qa.get("pass", False):
+            return {
+                "status": "error",
+                "stage": "speech_qa",
+                "message": "Lesson script did not pass spoken-Mandarin QA after one repair pass.",
+                "score": qa.get("score", 0),
+                "issues": qa.get("issues", []),
+                "revised_text": arguments.get("text", ""),
+            }
+
     return call_apps_script(arguments)
 
 
@@ -310,7 +439,7 @@ def run(prompt: str) -> None:
                 file=sys.stderr,
             )
 
-            result = execute_function(call.name, call.arguments)
+            result = execute_function(call.name, call.arguments, client=client)
 
             print(
                 f"[ABEL] result: {json.dumps(result, ensure_ascii=False)}",
