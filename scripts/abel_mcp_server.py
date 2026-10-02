@@ -1,6 +1,7 @@
 import os
 import requests
 from fastmcp import FastMCP
+from starlette.requests import Request
 
 mcp = FastMCP("abel_mcp")
 
@@ -56,7 +57,7 @@ def generate_lesson_audio(
 
 
 @mcp.custom_route("/", methods=["GET"])
-def health():
+def health(request: Request):
     return {
         "status": "online",
         "service": "Abel MCP Server",
