@@ -12,8 +12,8 @@ async def main(url: str):
         async with ClientSession(read_stream, write_stream) as session:
             print("Initializing...")
             init = await session.initialize()
-            print("SERVER:", init.serverInfo)
-            print("PROTOCOL:", init.protocolVersion)
+            print("SERVER:", init.server_info)
+            print("PROTOCOL:", init.protocol_version)
 
             result = await session.list_tools()
             tools = result.tools
