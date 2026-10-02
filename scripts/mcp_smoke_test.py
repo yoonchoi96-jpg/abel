@@ -23,7 +23,7 @@ async def main(url: str):
                 print(f"  - {tool.name}")
                 if tool.name == "generate_lesson_audio":
                     print("    description:", tool.description)
-                    print("    inputSchema:", tool.inputSchema)
+                    print("    input_schema:", tool.input_schema)
 
             names = [t.name for t in tools]
             if "generate_lesson_audio" not in names:
