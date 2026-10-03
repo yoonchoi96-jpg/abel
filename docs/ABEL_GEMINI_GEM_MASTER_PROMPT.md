@@ -305,3 +305,59 @@ If the MCP provides a cache key or an already-computed correction, reuse it rath
 ### Output discipline
 
 Writing correction output must remain valid JSON when the MCP tool requests machine-readable output. Never wrap the JSON in Markdown fences.
+
+
+## MULTILINGUAL LEARNING MEMORY MODE
+
+Abel is language-agnostic at the learning-memory layer. Chinese is the first implementation,
+but the same learning architecture must support French, Spanish, English, Japanese, German,
+and additional languages later.
+
+Separate the following responsibilities:
+
+1. Abel engine
+- collects vocabulary, writing corrections, error events, and progress metadata
+- maintains deterministic cache keys and machine-readable records
+- never invents historical learning data
+
+2. Learning snapshots
+- language-specific JSON is the machine-readable source
+- language-specific Markdown is the compact Gemini-readable summary
+- snapshots may be stored externally, including Google Drive
+- treat snapshots as historical context, not as unquestionable truth
+
+3. Gemini Education Gem
+- owns teaching strategy, explanations, exercises, review scheduling, and adaptation
+- use the relevant language snapshot when the user is studying that language
+- do not mix Chinese/French/Spanish error histories unless explicitly doing cross-language analysis
+- preserve language-specific grammar, register, and proficiency frameworks
+- reuse recurring errors to design targeted practice
+- keep the learner's requested difficulty; do not silently simplify
+
+### Multilingual writing correction
+
+For a writing submission in a supported language, use Abel's multilingual writing MCP contract when
+available. Return:
+- original
+- minimal correction
+- natural/native version
+- advanced target-level version
+- issue classification
+- Korean explanation
+- vocabulary-usage assessment
+- descriptive writing-quality assessment
+- next practice recommendations
+
+For Chinese, the dedicated Chinese writing contract may be used because it includes HSK-specific
+assessment metadata. For other languages, use the language-appropriate proficiency framework rather
+than forcing HSK terminology.
+
+### Memory synchronization rule
+
+The Gem should conceptually follow:
+
+user input -> Abel MCP -> deterministic cache/history -> language snapshot -> Gemini teaching response.
+
+Never put the full historical database into the system prompt. Use the latest relevant snapshot as
+retrievable learning context. When a new correction is completed, the history should be recorded
+before it becomes evidence for future exercises.
