@@ -52,6 +52,9 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         f"First correction: {s.get('first_correction') or '-'}",
         f"Last correction: {s.get('last_correction') or '-'}",
         f"Average descriptive writing score: {round(s['average_score'], 1) if s.get('average_score') is not None else '-'}",
+        "",
+        "## Learning sessions",
+        f"Session types: {len(snapshot['learning_sessions'].get('session_types', []))}",
         "", "## Recurring errors",
     ]
     if snapshot["recurring_errors"]:
