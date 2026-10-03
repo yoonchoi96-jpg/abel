@@ -1,5 +1,9 @@
 name: Experimental Gemini TTS Casual
 on:
+  push:
+    paths:
+      - "scripts/gemini_tts_casual.py"
+      - ".github/workflows/gemini-tts-casual.yml"
   workflow_dispatch:
 jobs:
   render:
