@@ -542,7 +542,9 @@ MANDATORY CHECKS
 9. EXPLANATIONS: explanations must discuss the actual current option wording, not an
    earlier revision. For each wrong option, give a concrete reason when explanation is
    requested.
-10. REGRESSION: if a revision fixed one defect but created ambiguity, leakage, factual
+10. QUESTION REVIEW COVERAGE: return exactly one question_reviews entry for every supplied
+    question number. Each entry must use one of: pass, revise, reject.
+11. REGRESSION: if a revision fixed one defect but created ambiguity, leakage, factual
     error, or a new grammar problem, flag the regression.
 
 IMPORTANT: Do not simplify HSK6 content merely to make it easier. Difficulty should come
