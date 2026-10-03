@@ -65,6 +65,7 @@ def evaluate_hsk_content(
     transcript: str = "",
     reference_facts: str = "",
     expected_total: int = 0,
+    expected_distribution_json: str = "",
 ) -> dict:
     """Run Abel's deterministic HSK exam QA and return the semantic-review prompt.
 
@@ -88,9 +89,19 @@ def evaluate_hsk_content(
             "message": "questions_json must decode to a JSON array.",
         }
 
+    expected_distribution = None
+    if expected_distribution_json.strip():
+        try:
+            expected_distribution = json.loads(expected_distribution_json)
+            if not isinstance(expected_distribution, dict):
+                raise ValueError("expected_distribution_json must be a JSON object.")
+        except (json.JSONDecodeError, ValueError) as exc:
+            return {"status": "error", "message": f"expected_distribution_json is invalid: {exc}"}
+
     report = evaluate_exam(
         questions,
         expected_total=expected_total or None,
+        expected_answer_distribution=expected_distribution,
     )
     report["semantic_review_prompt"] = build_llm_review_prompt(
         questions,
