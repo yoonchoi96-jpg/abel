@@ -55,6 +55,7 @@ SEED_WORDBOOKS = [
 DATA_ROOT = Path(os.environ.get("NAVER_WORDBOOK_DATA", "~/.naver_wordbook")).expanduser()
 PROFILE_DIR = DATA_ROOT / "browser_profile"
 BROWSER_CHANNEL = os.environ.get("NAVER_BROWSER", "chrome").strip().lower()
+NAVER_STORAGE_STATE_B64 = os.environ.get("NAVER_STORAGE_STATE_B64", "").strip()
 EXPORT_DIR = DATA_ROOT / "exports"
 DB_PATH = DATA_ROOT / "naver_wordbook.sqlite3"
 REPO_EXPORT = Path(os.environ.get("NAVER_WORDBOOK_EXPORT", "data/naver_wordbook.json"))
@@ -848,6 +849,7 @@ def write_repo_export(cards, wordbooks, snapshot_path):
 
 # Playwright is imported lazily inside browser-dependent code so stdlib-only jobs can reuse the SQLite helpers.
 def run(mode):
+    import base64
     from playwright.sync_api import sync_playwright
     ensure_dirs()
     init_db()
@@ -858,8 +860,30 @@ def run(mode):
         }
         if BROWSER_CHANNEL in {"chrome", "msedge", "chrome-beta", "chrome-dev"}:
             launch_kwargs["channel"] = BROWSER_CHANNEL
-        browser = p.chromium.launch_persistent_context(str(PROFILE_DIR), **launch_kwargs)
-        page = browser.pages[0] if browser.pages else browser.new_page()
+
+        # GitHub-hosted runners are ephemeral. When a compact Playwright
+        # storage-state secret is provided, restore the authenticated Naver
+        # cookies/localStorage into a fresh Chromium context.
+        browser = None
+        if NAVER_STORAGE_STATE_B64:
+            try:
+                raw = base64.b64decode(NAVER_STORAGE_STATE_B64).decode("utf-8")
+                storage_state = json.loads(raw)
+            except Exception as exc:
+                raise RuntimeError(
+                    "NAVER_STORAGE_STATE_B64 is not valid base64-encoded Playwright storage state"
+                ) from exc
+            browser = p.chromium.launch(**launch_kwargs)
+            context = browser.new_context(
+                storage_state=storage_state,
+                viewport=launch_kwargs["viewport"],
+            )
+        else:
+            context = p.chromium.launch_persistent_context(
+                str(PROFILE_DIR), **launch_kwargs
+            )
+
+        page = context.pages[0] if context.pages else context.new_page()
         try:
             if mode == "bootstrap":
                 page.goto(DEFAULT_URL, wait_until="domcontentloaded", timeout=60_000)
@@ -887,7 +911,9 @@ def run(mode):
             print(f"SQLite: {DB_PATH}")
             return 0
         finally:
-            browser.close()
+            context.close()
+            if browser is not None:
+                browser.close()
 
 def main():
     ap=argparse.ArgumentParser()
