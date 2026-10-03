@@ -34,3 +34,4 @@ jobs:
           python scripts/writing_practice_engine_test.py
           python scripts/error_review_engine_test.py
           python scripts/adaptive_learning_plan_test.py
+          python scripts/hsk_mock_builder_test.py
