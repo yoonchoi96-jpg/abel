@@ -10,7 +10,7 @@ import argparse, json
 from datetime import datetime, timezone
 
 SCHEMA="abel.learning.mock-test.v1"
-KINDS=("listening","reading","writing")
+KINDS=("listening","reading","writing","translation","speaking")
 
 def validate_mock(mock, units):
     required=("id","language","level","exam_system","sections")
