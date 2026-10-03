@@ -407,6 +407,30 @@ NATURAL-CADENCE QA:
 - For exam listening, keep answer-bearing facts acoustically prominent through clean
   phrasing and surrounding structure, not unnatural pauses or repetition.
 
+REGISTER CHECK:
+- Identify the script's likely genre before judging its naturalness.
+- Do not penalize formal vocabulary merely because it is not casual speech.
+- Do penalize formal prose that sounds like an article being read verbatim when the same
+  register could be delivered more naturally through spoken segmentation.
+- In dialogue, check subject omission, topic continuity, reaction relevance, and asymmetric
+  turn length rather than counting fillers.
+- In lecture/report formats, check information hierarchy, logical transitions, and spoken
+  segmentation rather than demanding conversational slang.
+- Check that advanced HSK6 syntax remains present where it carries meaning.
+- Naturalness must come from Mandarin discourse organization, not from adding "human-like"
+  filler words.
+
+LINGUISTIC PATTERN CHECK:
+- Flag three or more adjacent sentences with the same grammatical opening.
+- Flag repeated explicit subjects when context already supplies the referent.
+- Flag repeated transition markers in the same syntactic position.
+- Flag repeated sentence-final forms without a semantic reason.
+- Flag over-balanced sentences where each clause has the same syntactic weight.
+- Flag fragmented prose where short sentences appear at suspiciously regular intervals.
+- Flag dialogue where every turn has the same grammatical completeness and length.
+- Flag "formal vocabulary + casual filler" mixtures that do not belong to one coherent
+  register.
+
 FINAL "READ ALOUD" TEST:
 Imagine a native speaker recording the script in one take.
 Reject or revise it if the imagined reading feels like:
