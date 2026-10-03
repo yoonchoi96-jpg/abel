@@ -20,3 +20,5 @@ jobs:
           python3 scripts/mcp_smoke_test.py "https://abel-mcp-382528581049.asia-northeast3.run.app/mcp" --call
 
 # trigger validation
+
+# trigger after initialize field fix
