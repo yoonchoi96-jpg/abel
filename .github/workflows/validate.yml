@@ -14,8 +14,23 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install dependencies
-        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt pytest
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-mcp.txt pytest
       - name: Compile Python scripts
         run: python -m py_compile scripts/*.py
+      - name: Import production MCP server
+        env:
+          ABEL_APPS_SCRIPT_URL: https://example.com/abel-apps-script
+        run: |
+          python - <<'PY'
+          import scripts.abel_mcp_server as server
+          names = {tool.name for tool in server.mcp._tool_manager.list_tools()}
+          required = {"generate_lesson_audio", "evaluate_hsk_content", "finalize_hsk_review"}
+          missing = required - names
+          if missing:
+              raise SystemExit(f"Missing MCP tools: {sorted(missing)}")
+          print("Production MCP server import + tool registration: PASS")
+          PY
       - name: Run tests
         run: pytest -q
