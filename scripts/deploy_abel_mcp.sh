@@ -46,7 +46,15 @@ echo "service : $SERVICE"
 echo "apps script: $APPS_SCRIPT_URL"
 echo
 
-gcloud run deploy "$SERVICE"   --source .   --region "$REGION"   --project "$PROJECT"   --set-env-vars "ABEL_APPS_SCRIPT_URL=$APPS_SCRIPT_URL"   --quiet
+ENV_VARS="ABEL_APPS_SCRIPT_URL=$APPS_SCRIPT_URL"
+if [ -n "${MCP_AUTH_TOKEN:-}" ]; then
+  ENV_VARS="$ENV_VARS,MCP_AUTH_TOKEN=$MCP_AUTH_TOKEN"
+  echo "MCP auth: enabled"
+else
+  echo "MCP auth: disabled"
+fi
+
+gcloud run deploy "$SERVICE"   --source .   --region "$REGION"   --project "$PROJECT"   --set-env-vars "$ENV_VARS"   --quiet
 
 URL="$(gcloud run services describe "$SERVICE"   --region "$REGION"   --project "$PROJECT"   --format='value(status.url)')"
 
