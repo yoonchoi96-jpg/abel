@@ -23,7 +23,7 @@ def _session_from_result(result: dict[str, Any]) -> dict[str, Any]:
         "session_type": result.get("kind", "practice"),
         "resource_id": result.get("unit_id") or result.get("resource_id"),
         "level": result.get("level"),
-        "started_at": result.get("started_at") or result.get("completed_at"),
+        "started_at": result.get("started_at") or result.get("completed_at") or __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
         "duration_seconds": result.get("duration_seconds"),
         "score": result.get("score"),
         "total": result.get("total"),
