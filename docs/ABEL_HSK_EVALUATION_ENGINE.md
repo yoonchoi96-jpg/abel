@@ -58,3 +58,25 @@ The tool returns the deterministic report plus `semantic_review_prompt`.
 6. The revised version is checked for regression before acceptance.
 
 Abel must never treat a single reviewer comment as a permanent prohibition. New reviewer feedback should be generalized only when it represents a reusable evaluation rule.
+
+
+## Release gate
+
+The MCP surface exposes two QA stages:
+
+1. `evaluate_hsk_content` runs deterministic structural/statistical checks and returns `semantic_review_prompt`.
+2. Gemini (or another semantic reviewer) evaluates that prompt and returns the documented JSON review contract.
+3. `finalize_hsk_review` combines the deterministic report with the semantic JSON.
+4. A missing semantic review is **REVIEW**, never PASS. A semantic review with `pass=false` or any `critical_issues` is **REVIEW**. Only a deterministic PASS plus a valid semantic PASS with no critical issues produces `release_ready=true`.
+
+This keeps the Python service from pretending it can judge Mandarin semantics while still giving the calling agent a hard machine-readable release gate.
+
+## Live MCP smoke test
+
+`scripts/mcp_smoke_test.py` now verifies that the live server exposes:
+
+- `generate_lesson_audio`
+- `evaluate_hsk_content`
+- `finalize_hsk_review`
+
+It also executes the two QA tools with a minimal fixture after MCP initialization.
