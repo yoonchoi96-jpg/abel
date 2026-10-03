@@ -648,3 +648,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+# Speech QA parser hardened for provider-formatted JSON responses.
