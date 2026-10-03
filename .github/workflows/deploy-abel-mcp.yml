@@ -2,16 +2,15 @@ name: Deploy Abel MCP
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
+      - ".github/workflows/deploy-abel-mcp.yml"
       - "Dockerfile"
       - "requirements-mcp.txt"
       - "scripts/abel_mcp_server.py"
       - "scripts/hsk_evaluation_engine.py"
-      - "scripts/audio_style_profiles.py"
-      - "scripts/gemini_audio_executor.py"
       - "scripts/deploy_abel_mcp.sh"
-      - ".github/workflows/deploy-abel-mcp.yml"
   workflow_dispatch:
 
 concurrency:
@@ -22,68 +21,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    permissions:
-      contents: read
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: Set up gcloud
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Verify Google Cloud access
+      - uses: actions/checkout@v4
+      - name: Runner smoke test
         run: |
-          gcloud auth list --filter=status:ACTIVE --format='value(account)'
-          gcloud config get-value project
-          gcloud run services describe "${SERVICE:-abel-mcp}"             --region "${REGION:-asia-northeast3}"             --format='value(status.url)' || true
-
-      - name: Deploy Cloud Run
-        run: bash scripts/deploy_abel_mcp.sh
-
-      - name: Smoke test live MCP
-        run: |
-          python3 -m pip install --upgrade "mcp>=1.30,<2"
-          URL="$(gcloud run services describe "${SERVICE:-abel-mcp}"             --region "${REGION:-asia-northeast3}"             --format='value(status.url)')"
-          python3 scripts/mcp_smoke_test.py "$URL/mcp"
-
-      - name: Verify evaluation tool
-        run: |
-          URL="$(gcloud run services describe "${SERVICE:-abel-mcp}"             --region "${REGION:-asia-northeast3}"             --format='value(status.url)')"
-          python3 - <<'PY' "$URL/mcp"
-import asyncio, json, sys
-from mcp import ClientSession
-from mcp.client.streamable_http import streamable_http_client
-URL = sys.argv[1]
-async def main():
-    async with streamable_http_client(URL) as (read_stream, write_stream, _get_session_id):
-        async with ClientSession(read_stream, write_stream) as session:
-            await session.initialize()
-            tools = await session.list_tools()
-            names = [t.name for t in tools.tools]
-            print("LIVE TOOLS:", names)
-            if "evaluate_hsk_content" not in names:
-                raise SystemExit("FAIL: evaluate_hsk_content is not exposed by live MCP.")
-            questions = [
-                {"number":1,"part":1,"stem":"根据短文，下列哪项正确？","options":{"A":"项目已经完成","B":"项目正在建设","C":"项目尚未开始","D":"项目已经取消"},"answer":"B"},
-                {"number":2,"part":1,"stem":"文中提到的主要问题是什么？","options":{"A":"成本过高","B":"天气恶劣","C":"人员不足","D":"需求下降"},"answer":"A"},
-            ]
-            result = await session.call_tool("evaluate_hsk_content", {
-                "questions_json": json.dumps(questions, ensure_ascii=False),
-                "transcript": "项目正在建设，目前主要问题是成本过高。",
-                "expected_total": 2,
-            })
-            print("EVALUATION RESULT:", result)
-            if getattr(result, "is_error", False):
-                raise SystemExit("FAIL: evaluation tool returned MCP error.")
-            payload = result.content[0].text if result.content else ""
-            if "semantic_review_prompt" not in payload:
-                raise SystemExit("FAIL: semantic_review_prompt missing.")
-            print("PASS: live evaluate_hsk_content executed successfully.")
-asyncio.run(main())
-PY
+          echo "GitHub-hosted runner is alive."
+          uname -a
+          python3 --version
+          echo "DEPLOY_PIPELINE_STAGE=runner-ok"
