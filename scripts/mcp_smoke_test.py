@@ -51,8 +51,10 @@ async def main(url: str, call_tool: bool = False):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
+    if len(sys.argv) not in (2, 3):
         raise SystemExit(
-            "Usage: python3 scripts/mcp_smoke_test.py https://HOST/mcp"
+            "Usage: python3 scripts/mcp_smoke_test.py https://HOST/mcp [--call]"
         )
-    url = sys.argv[1]\n    call_tool = "--call" in sys.argv[2:]\n    asyncio.run(main(url, call_tool))
+    url = sys.argv[1]
+    call_tool = "--call" in sys.argv[2:]
+    asyncio.run(main(url, call_tool))
