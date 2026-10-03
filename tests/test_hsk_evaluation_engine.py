@@ -90,8 +90,14 @@ def test_expected_total_and_part_range():
     assert any(f["rule_id"] == "PART_RANGE" for f in report["findings"])
 
 
+def _passing_deterministic_report():
+    return evaluate_exam([
+        {"number": 1, "part": "listening", "stem": "x", "options": ["A甲", "B乙", "C丙", "D丁"], "answer": "A"},
+    ])
+
+
 def test_finalize_review_requires_semantic_pass_for_release():
-    deterministic = {"status": "PASS", "score": 100}
+    deterministic = _passing_deterministic_report()
     missing = finalize_review(deterministic)
     assert missing["gate"] == "REVIEW"
     assert not missing["release_ready"]
@@ -119,7 +125,7 @@ def test_finalize_review_rejects_critical_semantic_issue():
         "global_issues": [],
         "factual_verification_needed": [],
     }
-    result = finalize_review({"status": "PASS", "score": 100}, semantic)
+    result = finalize_review(_passing_deterministic_report(), semantic)
     assert result["gate"] == "REVIEW"
     assert not result["release_ready"]
 
@@ -149,7 +155,9 @@ def test_finalize_review_does_not_release_deterministic_review_status():
         "global_issues": [],
         "factual_verification_needed": [],
     }
-    result = finalize_review({"status": "REVIEW", "score": 100}, semantic)
+    deterministic = _passing_deterministic_report()
+    deterministic["status"] = "REVIEW"
+    result = finalize_review(deterministic, semantic)
     assert result["gate"] == "REVIEW"
     assert not result["release_ready"]
 
@@ -163,7 +171,7 @@ def test_finalize_review_rejects_string_boolean_pass():
         "global_issues": [],
         "factual_verification_needed": [],
     }
-    result = finalize_review({"status": "PASS", "score": 100}, semantic)
+    result = finalize_review(_passing_deterministic_report(), semantic)
     assert result["semantic_status"] == "INVALID"
     assert not result["release_ready"]
 
@@ -190,7 +198,7 @@ def test_finalize_review_requires_full_question_review_coverage():
 
 
 def test_finalize_review_blocks_unresolved_factual_verification():
-    deterministic = {"status": "PASS", "score": 100}
+    deterministic = _passing_deterministic_report()
     semantic = {
         "pass": True,
         "score": 99,
@@ -232,3 +240,37 @@ def test_question_number_conversion_is_safe():
     ])
     assert report["status"] == "FAIL"
     assert any(f["rule_id"] == "STRUCT_MALFORMED" for f in report["findings"])
+
+
+def test_finalize_review_rejects_forged_minimal_deterministic_report():
+    result = finalize_review(
+        {"status": "PASS", "score": 100},
+        {
+            "pass": True,
+            "score": 100,
+            "critical_issues": [],
+            "question_reviews": [],
+            "global_issues": [],
+            "factual_verification_needed": [],
+        },
+    )
+    assert result["gate"] == "FAIL"
+    assert result["semantic_status"] == "NOT_RUN"
+    assert not result["release_ready"]
+
+
+def test_finalize_review_requires_exact_question_review_numbers():
+    deterministic = _passing_deterministic_report()
+    semantic = {
+        "pass": True,
+        "score": 99,
+        "critical_issues": [],
+        "question_reviews": [
+            {"number": 999, "status": "pass", "issues": []},
+        ],
+        "global_issues": [],
+        "factual_verification_needed": [],
+    }
+    result = finalize_review(deterministic, semantic)
+    assert result["semantic_status"] == "INVALID"
+    assert not result["release_ready"]
