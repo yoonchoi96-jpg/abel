@@ -64,3 +64,27 @@ def test_duplicate_option_inside_question_is_flagged():
     ]
     report = evaluate_exam(qs)
     assert any(f["rule_id"] == "DUPLICATE_CONTENT" for f in report["findings"])
+
+
+def test_duplicate_stems_across_questions_are_flagged():
+    qs = [
+        {"number": 1, "part": "listening", "stem": "same", "options": ["A甲", "B乙", "C丙", "D丁"], "answer": "A"},
+        {"number": 2, "part": "listening", "stem": "same", "options": ["A甲", "B乙", "C丙", "D丁"], "answer": "B"},
+    ]
+    report = evaluate_exam(qs)
+    assert any(f["rule_id"] == "DUPLICATE_CONTENT" for f in report["findings"])
+
+
+def test_malformed_question_is_fail():
+    report = evaluate_exam([{"number": 1, "part": "listening", "stem": "x", "options": ["A", "B"], "answer": "A"}])
+    assert report["status"] == "FAIL"
+    assert any(f["rule_id"] == "STRUCT_MALFORMED" for f in report["findings"])
+
+
+def test_expected_total_and_part_range():
+    qs = [
+        {"number": 1, "part": "reading", "stem": "x", "options": ["A甲", "B乙", "C丙", "D丁"], "answer": "A"},
+    ]
+    report = evaluate_exam(qs, expected_total=2)
+    assert any(f["rule_id"] == "QUESTION_COUNT" for f in report["findings"])
+    assert any(f["rule_id"] == "PART_RANGE" for f in report["findings"])
