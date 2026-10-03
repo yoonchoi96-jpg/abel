@@ -129,6 +129,47 @@ def validate_multilingual_writing_correction(
 
 
 @mcp.tool()
+def get_learning_history_summary(
+    language: str = "zh-CN",
+) -> dict:
+    """Return the latest language-specific Abel learning snapshot for Gemini.
+
+    Snapshot files are immutable-style exports and are safer for Cloud Run than
+    relying on an ephemeral container SQLite database.
+    """
+    from pathlib import Path
+
+    language = (language or "").strip()
+    if not language or "/" in language or "\\" in language or language.startswith("."):
+        return {"status": "error", "message": "Invalid language identifier."}
+
+    path = Path(__file__).resolve().parent.parent / "data" / "learning_snapshots" / f"{language}.json"
+    if not path.exists():
+        return {
+            "status": "not_found",
+            "language": language,
+            "message": "No language snapshot is currently available.",
+        }
+
+    try:
+        snapshot = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {"status": "error", "language": language, "message": str(exc)}
+
+    return {
+        "status": "success",
+        "language": language,
+        "schema_version": snapshot.get("schema_version"),
+        "generated_at": snapshot.get("generated_at"),
+        "stats": snapshot.get("stats", {}),
+        "recurring_errors": snapshot.get("recurring_errors", []),
+        "problematic_vocabulary": snapshot.get("problematic_vocabulary", []),
+        "recent_corrections": snapshot.get("recent_corrections", []),
+        "gemini_instructions": snapshot.get("gemini_instructions", {}),
+    }
+
+
+@mcp.tool()
 def generate_lesson_audio(
     text: str,
     title: str = "",
