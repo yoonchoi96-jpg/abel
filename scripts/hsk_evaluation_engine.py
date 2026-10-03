@@ -87,7 +87,7 @@ def evaluate_exam(
     extreme_wrong: list[int] = []
     extreme_right: list[int] = []
     malformed: list[int] = []
-    duplicate_stems: dict[str, list[int]] = {}
+    duplicate_stems: dict[str, list[int]] = {}\n    duplicate_options: dict[str, list[int]] = {}
     option_shape_leaks: list[int] = []
     one_option_trivial: list[int] = []
 
@@ -219,7 +219,7 @@ def evaluate_exam(
 
     return {
         "engine": "Abel HSK Evaluation Engine",
-        "version": "1.0",
+        "version": "1.0.1",
         "status": status,
         "score": max(0, 100 - penalty),
         "metrics": {
