@@ -27,7 +27,7 @@ from google import genai
 
 APPS_SCRIPT_URL = os.getenv(
     "ABEL_APPS_SCRIPT_URL",
-    "https://script.google.com/macros/s/AKfcy2uN5ArGnOML3fHpEcP5X4wmMv8lsVgg1kuu8ZmRKwkUYvGxtj2tIDyf2FtyAgDdkA/exec",
+    "https://script.google.com/macros/s/AKfycby2uN5ArGnOML3fHpEcP5X4wmMv8lsVgg1kuu8ZmRKwkUYvGxtj2tIDyf2FtyAgDdkA/exec",
 )
 
 MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
