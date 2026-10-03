@@ -1,0 +1,27 @@
+name: Experimental Gemini TTS Dialogue
+
+on:
+  push:
+    paths:
+      - "scripts/gemini_tts_dialogue.py"
+      - ".github/workflows/gemini-tts-dialogue.yml"
+  workflow_dispatch:
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Generate two-speaker Mandarin TTS sample
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python scripts/gemini_tts_dialogue.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gemini-tts-hsk6-dialogue
+          path: gemini_tts_hsk6_dialogue.wav
+          retention-days: 7
