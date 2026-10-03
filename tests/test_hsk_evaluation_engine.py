@@ -102,6 +102,7 @@ def test_finalize_review_requires_semantic_pass_for_release():
         "critical_issues": [],
         "question_reviews": [],
         "global_issues": [],
+        "factual_verification_needed": [],
     }
     passed = finalize_review(deterministic, semantic)
     assert passed["gate"] == "PASS"
@@ -116,6 +117,7 @@ def test_finalize_review_rejects_critical_semantic_issue():
         "critical_issues": ["Question 7 has two valid answers."],
         "question_reviews": [],
         "global_issues": [],
+        "factual_verification_needed": [],
     }
     result = finalize_review({"status": "PASS", "score": 100}, semantic)
     assert result["gate"] == "REVIEW"
@@ -136,3 +138,97 @@ def test_english_option_starting_with_a_is_not_stripped():
     ]
     report = evaluate_exam(qs)
     assert report["metrics"]["question_count"] == 1
+
+
+def test_finalize_review_does_not_release_deterministic_review_status():
+    semantic = {
+        "pass": True,
+        "score": 99,
+        "critical_issues": [],
+        "question_reviews": [],
+        "global_issues": [],
+        "factual_verification_needed": [],
+    }
+    result = finalize_review({"status": "REVIEW", "score": 100}, semantic)
+    assert result["gate"] == "REVIEW"
+    assert not result["release_ready"]
+
+
+def test_finalize_review_rejects_string_boolean_pass():
+    semantic = {
+        "pass": "false",
+        "score": 99,
+        "critical_issues": [],
+        "question_reviews": [],
+        "global_issues": [],
+        "factual_verification_needed": [],
+    }
+    result = finalize_review({"status": "PASS", "score": 100}, semantic)
+    assert result["semantic_status"] == "INVALID"
+    assert not result["release_ready"]
+
+
+def test_finalize_review_requires_full_question_review_coverage():
+    deterministic = evaluate_exam([
+        {"number": 1, "part": "listening", "stem": "x", "options": ["A甲", "B乙", "C丙", "D丁"], "answer": "A"},
+        {"number": 2, "part": "listening", "stem": "y", "options": ["A甲", "B乙", "C丙", "D丁"], "answer": "B"},
+    ])
+    semantic = {
+        "pass": True,
+        "score": 99,
+        "critical_issues": [],
+        "question_reviews": [
+            {"number": 1, "status": "pass", "issues": []},
+        ],
+        "global_issues": [],
+        "factual_verification_needed": [],
+    }
+    result = finalize_review(deterministic, semantic)
+    assert result["semantic_status"] == "INVALID"
+    assert "coverage" in result["critical_issues"][0].lower()
+    assert not result["release_ready"]
+
+
+def test_finalize_review_blocks_unresolved_factual_verification():
+    deterministic = {"status": "PASS", "score": 100}
+    semantic = {
+        "pass": True,
+        "score": 99,
+        "critical_issues": [],
+        "question_reviews": [],
+        "global_issues": [],
+        "factual_verification_needed": ["Verify the historical date."],
+    }
+    result = finalize_review(deterministic, semantic)
+    assert result["gate"] == "REVIEW"
+    assert not result["release_ready"]
+
+
+def test_duplicate_question_number_and_option_count_are_failures():
+    report = evaluate_exam([
+        {"number": 1, "part": "listening", "stem": "x", "options": ["A甲", "B乙", "C丙", "D丁", "E戊"], "answer": "A"},
+        {"number": 1, "part": "listening", "stem": "y", "options": ["A甲", "B乙", "C丙", "D丁"], "answer": "B"},
+    ])
+    assert report["status"] == "FAIL"
+    rules = {f["rule_id"] for f in report["findings"]}
+    assert "DUPLICATE_QUESTION_NUMBER" in rules
+    assert "OPTION_COUNT" in rules
+
+
+def test_answer_run_uses_question_number_order():
+    qs = [
+        {"number": 3, "part": "listening", "stem": "z", "options": ["A甲", "B乙", "C丙", "D丁"], "answer": "A"},
+        {"number": 1, "part": "listening", "stem": "x", "options": ["A甲", "B乙", "C丙", "D丁"], "answer": "A"},
+        {"number": 2, "part": "listening", "stem": "y", "options": ["A甲", "B乙", "C丙", "D丁"], "answer": "A"},
+    ]
+    report = evaluate_exam(qs)
+    assert report["metrics"]["max_answer_run"] == 3
+    assert any(f["rule_id"] == "ANSWER_RUN" for f in report["findings"])
+
+
+def test_question_number_conversion_is_safe():
+    report = evaluate_exam([
+        {"number": "not-a-number", "part": "listening", "stem": "x", "options": ["A", "B", "C", "D"], "answer": "A"},
+    ])
+    assert report["status"] == "FAIL"
+    assert any(f["rule_id"] == "STRUCT_MALFORMED" for f in report["findings"])
