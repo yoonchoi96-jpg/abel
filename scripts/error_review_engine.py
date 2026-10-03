@@ -28,7 +28,7 @@ def build_review(results, now=None):
         priority=severity*(1+math.log1p(wrong))*recency/(1+0.15*max(0,attempts-1))
         rows.append({"question_id":qid,"priority":round(priority,6),
                      "error_type":r.get("error_type"),
-                     "resource_id":r.get("resource_id"),
+                     "resource_id":r.get("resource_id"),"kind":r.get("kind"),
                      "language":r.get("language"),
                      "level":r.get("level")})
     rows.sort(key=lambda x:(-x["priority"],x["question_id"]))
