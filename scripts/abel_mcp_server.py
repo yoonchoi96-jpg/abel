@@ -3,16 +3,24 @@ import os
 import requests
 from fastmcp import FastMCP
 from starlette.requests import Request
+from starlette.responses import JSONResponse
+from fastmcp.server.auth import StaticTokenVerifier
 
 try:
     from hsk_evaluation_engine import build_llm_review_prompt, evaluate_exam, finalize_review
 except ModuleNotFoundError:
     from scripts.hsk_evaluation_engine import build_llm_review_prompt, evaluate_exam, finalize_review
 
-mcp = FastMCP("abel_mcp")
-
 APPS_SCRIPT_URL = os.environ["ABEL_APPS_SCRIPT_URL"]
 MCP_AUTH_TOKEN = os.environ.get("MCP_AUTH_TOKEN", "")
+
+if MCP_AUTH_TOKEN:
+    mcp_auth = StaticTokenVerifier(
+        tokens={MCP_AUTH_TOKEN: {"sub": "abel-client", "client_id": "abel-client"}}
+    )
+    mcp = FastMCP("abel_mcp", auth=mcp_auth)
+else:
+    mcp = FastMCP("abel_mcp")
 
 
 @mcp.tool()
@@ -152,11 +160,11 @@ def finalize_hsk_review(
 
 
 @mcp.custom_route("/", methods=["GET"])
-def health(request: Request):
-    return {
+async def health(request: Request):
+    return JSONResponse({
         "status": "online",
         "service": "Abel MCP Server",
-    }
+    })
 
 
 if __name__ == "__main__":
