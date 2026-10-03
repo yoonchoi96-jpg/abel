@@ -12,12 +12,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check GCP secret
+      - name: Detect configured Google Cloud credential secret
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          GOOGLE_CLOUD_CREDENTIALS: ${{ secrets.GOOGLE_CLOUD_CREDENTIALS }}
+          GCP_CREDENTIALS_JSON: ${{ secrets.GCP_CREDENTIALS_JSON }}
+          GCP_SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
         run: |
-          if [ -z "$GCP_SA_KEY" ]; then
-            echo "GCP_SA_KEY is not configured."
+          found=0
+          for name in GCP_SA_KEY GCP_SERVICE_ACCOUNT_KEY GOOGLE_CREDENTIALS GOOGLE_CLOUD_CREDENTIALS GCP_CREDENTIALS_JSON GCP_SERVICE_ACCOUNT_JSON; do
+            eval "value=\${$name}"
+            if [ -n "$value" ]; then
+              echo "FOUND=$name"
+              found=1
+            fi
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "NO_GCP_CREDENTIAL_SECRET_FOUND"
             exit 1
           fi
-          echo "GCP_SA_KEY is configured."
