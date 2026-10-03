@@ -9,8 +9,51 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - name: Runner sanity check
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Select project
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
         run: |
-          echo "Abel deploy workflow runner started"
-          echo "SHA=${GITHUB_SHA}"
+          test -n "$GCP_SA_KEY" || {
+            echo "::error::Missing repository secret GCP_SA_KEY. Add it under Settings > Secrets and variables > Actions."
+            exit 1
+          }
+          PROJECT_ID="$(python3 - <<'PY'
+import json, os
+data=json.loads(os.environ["GCP_SA_KEY"])
+print(data.get("project_id", ""))
+PY
+)"
+          test -n "$PROJECT_ID" || {
+            echo "::error::GCP_SA_KEY JSON has no project_id."
+            exit 1
+          }
+          gcloud config set project "$PROJECT_ID"
+          echo "PROJECT_ID=$PROJECT_ID" >> "$GITHUB_ENV"
+
+      - name: Deploy Cloud Run
+        env:
+          MCP_AUTH_TOKEN: ${{ secrets.MCP_AUTH_TOKEN }}
+        run: |
+          chmod +x scripts/deploy_abel_mcp.sh
+          ./scripts/deploy_abel_mcp.sh
+
+      - name: Verify live MCP surface
+        env:
+          MCP_AUTH_TOKEN: ${{ secrets.MCP_AUTH_TOKEN }}
+        run: |
+          URL="$(gcloud run services describe abel-mcp --region asia-northeast3 --format='value(status.url)')"
+          python3 -m pip install --quiet "mcp>=1.9,<2" "httpx>=0.28,<1"
+          python3 scripts/mcp_smoke_test.py "$URL/mcp"
