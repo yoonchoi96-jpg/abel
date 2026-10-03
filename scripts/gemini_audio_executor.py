@@ -466,9 +466,28 @@ def review_script(client, script: str, title: str, level: str, topic: str) -> di
     )
     review = client.interactions.create(model=MODEL, input=prompt)
     raw = (review.output_text or "").strip()
-    try:
-        result = json.loads(raw)
-    except json.JSONDecodeError:
+    result = None
+    candidates = [raw]
+    fence = "```"
+    if fence in raw:
+        candidates.extend(
+            part.strip().removeprefix("json").strip()
+            for part in raw.split(fence)
+            if "{" in part
+        )
+    decoder = json.JSONDecoder()
+    for candidate in candidates:
+        start = candidate.find("{")
+        if start < 0:
+            continue
+        try:
+            parsed, _ = decoder.raw_decode(candidate[start:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            result = parsed
+            break
+    if result is None:
         return {
             "pass": False,
             "score": 0,
