@@ -8,7 +8,7 @@ from mcp.client.streamable_http import streamable_http_client
 
 async def main(url: str, call_tool: bool = False):
     print(f"Connecting: {url}")
-    async with streamable_http_client(url) as (read_stream, write_stream):
+    async with streamable_http_client(url) as (read_stream, write_stream, _get_session_id):
         async with ClientSession(read_stream, write_stream) as session:
             print("Initializing...")
             init = await session.initialize()
