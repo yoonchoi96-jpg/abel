@@ -11,8 +11,8 @@ def _server(monkeypatch):
 
 def test_generate_lesson_audio_rejects_empty_and_oversized_input(monkeypatch):
     server = _server(monkeypatch)
-    assert server.generate_lesson_audio("").get("status") == "error"
-    oversized = server.generate_lesson_audio("甲" * (server.MAX_LESSON_CHARS + 1))
+    assert server.generate_lesson_audio.fn("").get("status") == "error"
+    oversized = server.generate_lesson_audio.fn("甲" * (server.MAX_LESSON_CHARS + 1))
     assert oversized.get("status") == "error"
     assert "limit" in oversized.get("message", "").lower()
 
@@ -20,7 +20,7 @@ def test_generate_lesson_audio_rejects_empty_and_oversized_input(monkeypatch):
 def test_evaluate_hsk_content_enforces_request_size_and_question_count(monkeypatch):
     server = _server(monkeypatch)
 
-    oversized = server.evaluate_hsk_content("x" * (server.MAX_QUESTIONS_JSON_CHARS + 1))
+    oversized = server.evaluate_hsk_content.fn("x" * (server.MAX_QUESTIONS_JSON_CHARS + 1))
     assert oversized.get("status") == "error"
 
     questions = [
@@ -33,14 +33,14 @@ def test_evaluate_hsk_content_enforces_request_size_and_question_count(monkeypat
         }
         for i in range(1, server.MAX_QUESTIONS + 2)
     ]
-    result = server.evaluate_hsk_content(json.dumps(questions, ensure_ascii=False))
+    result = server.evaluate_hsk_content.fn(json.dumps(questions, ensure_ascii=False))
     assert result.get("status") == "error"
     assert "question" in result.get("message", "").lower()
 
 
 def test_finalize_hsk_review_rejects_non_object_deterministic_report(monkeypatch):
     server = _server(monkeypatch)
-    result = server.finalize_hsk_review(json.dumps([]))
+    result = server.finalize_hsk_review.fn(json.dumps([]))
     assert result.get("status") == "error"
 
 
