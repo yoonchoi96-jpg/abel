@@ -114,7 +114,7 @@ def evaluate_hsk_content(
         transcript=transcript,
         reference_facts=reference_facts,
     )
-    report["status"] = "success"
+    report["tool_status"] = "success"
     return report
 
 
