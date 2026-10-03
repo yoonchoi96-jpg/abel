@@ -14,7 +14,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: hsk30-sync
+  group: hsk30-sync-gh
   cancel-in-progress: false
 
 jobs:
