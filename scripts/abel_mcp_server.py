@@ -4,7 +4,7 @@ import requests
 from fastmcp import FastMCP
 from starlette.requests import Request
 
-from hsk_evaluation_engine import build_llm_review_prompt, evaluate_exam
+from hsk_evaluation_engine import build_llm_review_prompt, evaluate_exam, finalize_review
 
 mcp = FastMCP("abel_mcp")
 
@@ -110,6 +110,36 @@ def evaluate_hsk_content(
     )
     report["status"] = "success"
     return report
+
+
+@mcp.tool()
+def finalize_hsk_review(
+    deterministic_report_json: str,
+    semantic_review_json: str = "",
+) -> dict:
+    """Apply Abel's final release gate to deterministic and Gemini semantic QA results.
+
+    If semantic_review_json is omitted, the result stays in REVIEW/NOT_RUN rather
+    than falsely passing. This keeps model-based review explicit and auditable.
+    """
+    try:
+        deterministic_report = json.loads(deterministic_report_json)
+        if not isinstance(deterministic_report, dict):
+            raise ValueError("deterministic_report_json must be a JSON object.")
+    except (json.JSONDecodeError, ValueError) as exc:
+        return {"status": "error", "message": f"deterministic_report_json is invalid: {exc}"}
+
+    semantic_review = None
+    if semantic_review_json.strip():
+        try:
+            semantic_review = json.loads(semantic_review_json)
+        except json.JSONDecodeError as exc:
+            return {"status": "error", "message": f"semantic_review_json is invalid: {exc}"}
+
+    return {
+        "status": "success",
+        "review": finalize_review(deterministic_report, semantic_review),
+    }
 
 
 @mcp.custom_route("/", methods=["GET"])
