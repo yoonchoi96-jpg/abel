@@ -219,7 +219,12 @@ def evaluate_exam(
         ))
 
     for part, (lo, hi) in PART_LIMITS.items():
-        nums = [int(q.get("number", 0) or 0) for q in questions if q.get("part") == part]
+        nums = [
+            n for q in questions
+            if q.get("part") == part
+            for n in [_question_number(q.get("number"))]
+            if n is not None
+        ]
         if nums:
             if min(nums) < lo or max(nums) > hi:
                 findings.append(_finding("PART_RANGE", "error",
