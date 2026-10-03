@@ -38,6 +38,12 @@ PART_LIMITS = {
     "writing": (101, 101),
 }
 
+HSK6_PART_NUMBERS = {
+    "listening": set(range(1, 51)),
+    "reading": set(range(51, 101)),
+    "writing": {101},
+}
+
 
 @dataclass
 class Finding:
@@ -229,6 +235,21 @@ def evaluate_exam(
             if min(nums) < lo or max(nums) > hi:
                 findings.append(_finding("PART_RANGE", "error",
                     f"{part} question numbers fall outside {lo}-{hi}.", nums))
+
+    if expected_total == 101:
+        for part, expected_numbers in HSK6_PART_NUMBERS.items():
+            actual_numbers = {
+                n for q in questions
+                if q.get("part") == part
+                for n in [_question_number(q.get("number"))]
+                if n is not None
+            }
+            if actual_numbers != expected_numbers:
+                findings.append(_finding(
+                    "HSK6_PART_LAYOUT", "error",
+                    f"{part} must contain exactly the HSK6 question numbers {min(expected_numbers)}-{max(expected_numbers)}.",
+                    sorted(actual_numbers | expected_numbers),
+                ))
 
     if answers:
         answers = sorted(answers, key=lambda item: item[0])
