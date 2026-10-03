@@ -45,9 +45,9 @@ def main():
     with wave.open("gemini_tts_hsk6_ab_v2.wav","wb") as w:
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(24000); w.writeframes(data)
     duration = len(data) / (24000 * 2)
-print(f"PASS Gemini TTS v2 generated {len(data)} bytes; mime={mime}; duration={duration:.2f}s")
-if duration < 45 or duration > 150:
-    raise RuntimeError(f"FAIL: duration {duration:.2f}s outside HSK6 target range 45-150s")
+    print(f"PASS Gemini TTS v2 generated {len(data)} bytes; mime={mime}; duration={duration:.2f}s")
+    if duration < 45 or duration > 150:
+        raise RuntimeError(f"FAIL: duration {duration:.2f}s outside HSK6 target range 45-150s")
 
 if __name__=="__main__":
     main()
