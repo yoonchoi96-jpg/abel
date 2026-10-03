@@ -21,4 +21,15 @@ except ValueError as e:
 else:
     raise AssertionError("missing source unit must fail")
 
+UNITS79=[
+ {"id":"l79","kind":"listening","language":"zh-CN","level":"HSK7-9"},
+ {"id":"r79","kind":"reading","language":"zh-CN","level":"HSK7-9"},
+ {"id":"w79","kind":"writing","language":"zh-CN","level":"HSK7-9"},
+ {"id":"t79","kind":"translation","language":"zh-CN","level":"HSK7-9"},
+ {"id":"s79","kind":"speaking","language":"zh-CN","level":"HSK7-9"}
+]
+out79=build("HSK3.0-7-9",UNITS79,PROFILES,mock_id="hsk79-mock-001")
+assert [x["kind"] for x in out79["sections"]]==["listening","reading","writing","translation","speaking"]
+assert [x["expected_items"] for x in out79["sections"]]==[40,47,2,4,5]
+
 print("hsk_mock_builder_test: ok")
