@@ -1,18 +1,10 @@
 name: Deploy Abel MCP
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/**"
-      - "Dockerfile"
-      - "requirements-mcp.txt"
-      - ".github/workflows/deploy-abel-mcp.yml"
   workflow_dispatch:
 
 jobs:
   deploy:
-    if: ${{ secrets.GCP_SA_KEY != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
