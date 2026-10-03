@@ -59,6 +59,8 @@ def _option_text(option: Any) -> str:
     text = str(option).strip()
     # Accept common labels without corrupting ordinary option text.
     text = re.sub(r"^[\s【\[]*[ABCD](?:[\.、:：\)）]|\s+)", "", text, count=1, flags=re.I)
+    if len(text) >= 2 and text[0].upper() in "ABCD" and re.match(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]", text[1]):
+        text = text[1:]
     return text
 
 
