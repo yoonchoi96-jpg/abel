@@ -225,7 +225,7 @@ def evaluate_exam(
 
     return {
         "engine": "Abel HSK Evaluation Engine",
-        "version": "1.0.1",
+        "version": "1.1.0",
         "status": status,
         "score": max(0, 100 - penalty),
         "metrics": {
@@ -247,6 +247,69 @@ def evaluate_exam(
             "explanation accuracy",
         ],
     }
+
+
+def finalize_review(
+    deterministic_report: dict[str, Any],
+    semantic_review: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Combine deterministic QA with an externally produced semantic-review JSON.
+
+    Abel does not invent semantic judgments. It only validates the review contract
+    and converts the two QA layers into one machine-readable release gate.
+    """
+    result = {
+        "gate": "FAIL" if deterministic_report.get("status") == "FAIL" else "PASS",
+        "deterministic_status": deterministic_report.get("status", "UNKNOWN"),
+        "semantic_status": "NOT_RUN",
+        "score": deterministic_report.get("score", 0),
+        "release_ready": False,
+        "critical_issues": [],
+        "global_issues": [],
+    }
+
+    if result["gate"] == "FAIL":
+        return result
+
+    if semantic_review is None:
+        result["gate"] = "REVIEW"
+        result["semantic_status"] = "NOT_RUN"
+        return result
+
+    if not isinstance(semantic_review, dict):
+        result["gate"] = "FAIL"
+        result["semantic_status"] = "INVALID"
+        result["critical_issues"] = ["semantic_review must be a JSON object."]
+        return result
+
+    required = ("pass", "score", "critical_issues", "question_reviews", "global_issues")
+    missing = [key for key in required if key not in semantic_review]
+    if missing:
+        result["gate"] = "FAIL"
+        result["semantic_status"] = "INVALID"
+        result["critical_issues"] = [f"Missing semantic-review fields: {', '.join(missing)}"]
+        return result
+
+    semantic_pass = bool(semantic_review.get("pass"))
+    semantic_score = semantic_review.get("score")
+    if not isinstance(semantic_score, (int, float)) or not 0 <= semantic_score <= 100:
+        result["gate"] = "FAIL"
+        result["semantic_status"] = "INVALID"
+        result["critical_issues"] = ["semantic_review.score must be a number from 0 to 100."]
+        return result
+
+    result["semantic_status"] = "PASS" if semantic_pass else "REVISE"
+    result["score"] = min(float(deterministic_report.get("score", 0)), float(semantic_score))
+    result["critical_issues"] = list(semantic_review.get("critical_issues") or [])
+    result["global_issues"] = list(semantic_review.get("global_issues") or [])
+
+    if not semantic_pass or result["critical_issues"]:
+        result["gate"] = "REVIEW"
+    else:
+        result["gate"] = "PASS"
+
+    result["release_ready"] = result["gate"] == "PASS"
+    return result
 
 
 def build_llm_review_prompt(
