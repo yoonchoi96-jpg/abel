@@ -4,32 +4,63 @@ on:
   push:
     branches: [main]
     paths:
+      - "scripts/**"
+      - "Dockerfile"
+      - "requirements-mcp.txt"
       - ".github/workflows/deploy-abel-mcp.yml"
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
-      - name: Detect configured Google Cloud credential secret
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Select project
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
-          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
-          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
-          GOOGLE_CLOUD_CREDENTIALS: ${{ secrets.GOOGLE_CLOUD_CREDENTIALS }}
-          GCP_CREDENTIALS_JSON: ${{ secrets.GCP_CREDENTIALS_JSON }}
-          GCP_SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
         run: |
-          found=0
-          for name in GCP_SA_KEY GCP_SERVICE_ACCOUNT_KEY GOOGLE_CREDENTIALS GOOGLE_CLOUD_CREDENTIALS GCP_CREDENTIALS_JSON GCP_SERVICE_ACCOUNT_JSON; do
-            eval "value=\${$name}"
-            if [ -n "$value" ]; then
-              echo "FOUND=$name"
-              found=1
-            fi
-          done
-          if [ "$found" -eq 0 ]; then
-            echo "NO_GCP_CREDENTIAL_SECRET_FOUND"
+          test -n "$GCP_SA_KEY" || {
+            echo "::error::Missing repository secret GCP_SA_KEY. Add the service-account JSON under Settings > Secrets and variables > Actions."
             exit 1
-          fi
+          }
+          PROJECT_ID="$(python3 - <<'PY'
+import json, os
+data=json.loads(os.environ["GCP_SA_KEY"])
+print(data.get("project_id", ""))
+PY
+)"
+          test -n "$PROJECT_ID" || {
+            echo "::error::GCP_SA_KEY JSON has no project_id."
+            exit 1
+          }
+          gcloud config set project "$PROJECT_ID"
+          echo "PROJECT_ID=$PROJECT_ID" >> "$GITHUB_ENV"
+
+      - name: Deploy Cloud Run
+        env:
+          ABEL_APPS_SCRIPT_URL: ${{ secrets.ABEL_APPS_SCRIPT_URL }}
+        run: |
+          test -n "$ABEL_APPS_SCRIPT_URL" || {
+            echo "::error::Missing repository secret ABEL_APPS_SCRIPT_URL."
+            exit 1
+          }
+          export ABEL_APPS_SCRIPT_URL
+          chmod +x scripts/deploy_abel_mcp.sh
+          ./scripts/deploy_abel_mcp.sh
+
+      - name: Verify live MCP surface
+        run: |
+          URL="$(gcloud run services describe abel-mcp --region asia-northeast3 --format='value(status.url)')"
+          python3 -m pip install --quiet "mcp>=1.9,<2"
+          python3 scripts/mcp_smoke_test.py "$URL/mcp"
