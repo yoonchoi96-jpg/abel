@@ -1,6 +1,6 @@
 import json
 
-from scripts.hsk_evaluation_engine import build_llm_review_prompt, evaluate_exam
+from scripts.hsk_evaluation_engine import build_llm_review_prompt, evaluate_exam, finalize_review
 
 
 def test_distribution_and_answer_run():
@@ -88,3 +88,35 @@ def test_expected_total_and_part_range():
     report = evaluate_exam(qs, expected_total=2)
     assert any(f["rule_id"] == "QUESTION_COUNT" for f in report["findings"])
     assert any(f["rule_id"] == "PART_RANGE" for f in report["findings"])
+
+
+def test_finalize_review_requires_semantic_pass_for_release():
+    deterministic = {"status": "PASS", "score": 100}
+    missing = finalize_review(deterministic)
+    assert missing["gate"] == "REVIEW"
+    assert not missing["release_ready"]
+
+    semantic = {
+        "pass": True,
+        "score": 96,
+        "critical_issues": [],
+        "question_reviews": [],
+        "global_issues": [],
+    }
+    passed = finalize_review(deterministic, semantic)
+    assert passed["gate"] == "PASS"
+    assert passed["release_ready"]
+    assert passed["score"] == 96
+
+
+def test_finalize_review_rejects_critical_semantic_issue():
+    semantic = {
+        "pass": True,
+        "score": 96,
+        "critical_issues": ["Question 7 has two valid answers."],
+        "question_reviews": [],
+        "global_issues": [],
+    }
+    result = finalize_review({"status": "PASS", "score": 100}, semantic)
+    assert result["gate"] == "REVIEW"
+    assert not result["release_ready"]
