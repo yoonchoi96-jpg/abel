@@ -22,3 +22,5 @@ jobs:
 # trigger validation
 
 # trigger after initialize field fix
+
+# trigger after tool schema fix
