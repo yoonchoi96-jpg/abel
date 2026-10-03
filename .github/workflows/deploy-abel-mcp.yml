@@ -1,6 +1,8 @@
 name: Deploy Abel MCP
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -24,7 +26,7 @@ jobs:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
         run: |
           test -n "$GCP_SA_KEY" || {
-            echo "::error::Missing repository secret GCP_SA_KEY. Add the service-account JSON under Settings > Secrets and variables > Actions."
+            echo "::error::Missing repository secret GCP_SA_KEY. Add it under Settings > Secrets and variables > Actions."
             exit 1
           }
           PROJECT_ID="$(python3 - <<'PY'
