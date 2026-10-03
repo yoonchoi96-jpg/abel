@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from writing_history import connect, error_summary, vocabulary_summary
+from learning_session import summary as session_summary
 
 def build_snapshot(language: str, db_path: str | Path) -> dict[str, Any]:
     conn = connect(db_path)
@@ -29,6 +30,7 @@ def build_snapshot(language: str, db_path: str | Path) -> dict[str, Any]:
         "language": language,
         "source": "Abel local learning history",
         "stats": dict(stats),
+        "learning_sessions": session_summary(language, db_path),
         "recurring_errors": error_summary(language=language, db_path=db_path),
         "problematic_vocabulary": vocabulary_summary(language=language, db_path=db_path),
         "recent_corrections": [dict(x) for x in recent],
