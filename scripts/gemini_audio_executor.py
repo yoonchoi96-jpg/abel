@@ -160,11 +160,82 @@ Immediately before the tool call, verify:
 The generated text must already be the final spoken version. Do not rely on
 the audio backend to repair unnatural Chinese.
 
-I. Do not over-naturalize
-Natural spoken Mandarin is not the same as casual chat.
-For lectures, interviews, reports, and exam-style passages, retain the appropriate
-register. Do not turn formal HSK6 material into social-media speech.
-Do not insert "嗯", "其实", "你看", etc. unless a real speaker would plausibly need them.
+I. REGISTER-AWARE SPOKEN MANDARIN GENERATION
+First classify the lesson internally into one primary delivery mode:
+1. CONVERSATIONAL DIALOGUE — everyday but educated Mandarin; concise turns,
+   natural topic shifts, confirmations, clarifications, mild disagreement,
+   ellipsis/subject omission where context makes the referent obvious.
+2. INTERVIEW — spontaneous but articulate; interviewer questions can be compact,
+   interviewee answers can develop an idea across several sentence lengths.
+3. ANNOUNCEMENT / NOTICE — concise, orderly, information-first; not chatty.
+4. NEWS / REPORT — information-dense broadcast Mandarin; controlled and relatively
+   formal, but still spoken in phrasing and sentence segmentation.
+5. LECTURE / EXPLANATION — planned spoken exposition; explicit logical links,
+   examples, reformulation, contrast and consequence; do not turn it into an essay.
+6. NARRATIVE / STORY — temporal progression, event focus, occasional short reactions
+   or evaluative follow-ups; preserve narrative clarity.
+7. FORMAL INFORMATIONAL — relatively written vocabulary and syntax are acceptable,
+   but the segmentation must still sound like a person delivering information aloud.
+
+Then apply these linguistic principles:
+- Spoken Mandarin frequently relies on discourse context rather than repeating the
+  grammatical subject. Omit or replace repeated subjects when the referent is clear;
+  do NOT omit them when ambiguity would affect comprehension.
+- Use topic-comment structure naturally when it improves information flow. The topic
+  may be a time, place, object, issue, or previously mentioned entity rather than a
+  repeated personal subject.
+- Prefer information structure that moves from given/contextual information toward
+  new or contrastive information. Put the answer-bearing/new information in the
+  structurally prominent part of the sentence.
+- Use short follow-up clauses for reactions, consequences, clarification, or evaluation
+  when they would naturally be separate speech units. Do not turn every idea into one
+  syntactically balanced sentence.
+- Allow natural spoken constructions such as 其实、不过、所以、这样一来、后来、
+  结果、也就是说、换句话说、你可以理解为 when they perform a real discourse
+  function. They are not required in every passage.
+- Sentence-final particles such as 吧、呢、啊 should be rare and genre-appropriate.
+  Never sprinkle them merely to create a "Chinese-sounding" effect.
+- Avoid textbook-like repetition of explicit subjects, identical transition phrases,
+  and identical sentence-final patterns.
+- Avoid deliberately adding fragments, fillers, contractions, slang, or colloquialisms.
+  Naturalness comes primarily from information structure and turn design, not decoration.
+- Preserve advanced HSK6 constructions such as long modifier chains, 把/被 structures,
+  complex complements, relative clauses, conditionals, concessions, causal chains,
+  nominalization, and abstract noun phrases when the content calls for them.
+- Do not force every HSK6 sentence into a short spoken form. Real educated speech can
+  contain long syntactically complex sentences; what matters is that the information
+  hierarchy and phrasing are intelligible.
+- Avoid "written-language vocabulary + conversational filler" as a fake hybrid.
+  Register must be internally coherent.
+
+HSK6 SPOKEN-NATURALITY TARGET:
+The ideal script should sound like an educated native speaker explaining, reporting,
+discussing, or responding to the topic aloud — NOT like a casual social-media post and
+NOT like a written article read verbatim.
+
+GENRE-SPECIFIC BALANCE:
+- Dialogue: prioritize interactional realism, but keep vocabulary and reasoning at HSK6.
+- Lecture: prioritize logical exposition and natural spoken segmentation; do not casualize.
+- Report/news: retain formal lexical choices and dense facts; use spoken sentence boundaries.
+- Narrative: prioritize temporal/event progression and natural reaction structure.
+- Announcement: prioritize concise, explicit, easily recoverable information.
+- Interview: let turns have asymmetric lengths and different discourse functions.
+- Formal passage: preserve literary/formal register where needed, but avoid unnecessarily
+  nested clauses that would be difficult for an actual speaker to deliver.
+
+J. FINAL LINGUISTIC PATTERN CHECK
+Before generating audio, silently inspect the whole script for these measurable patterns:
+- Three or more adjacent sentences beginning with the same grammatical frame.
+- Three or more adjacent sentences with nearly identical length and punctuation shape.
+- Repeated explicit subject when the referent is already obvious.
+- Repeated discourse marker at the same position.
+- Repeated sentence-final pattern with no discourse reason.
+- Long sentence containing multiple independent propositions that would naturally be
+  delivered as separate thoughts.
+- Excessive one-clause fragmentation that sounds artificially "written for TTS".
+- A dialogue in which every turn is complete, equally long, and equally polished.
+- A formal passage contaminated by unnecessary casual fillers.
+If any pattern appears, revise the structure rather than merely changing words.
 
 The audio tool creates an MP3 with Google Cloud TTS and saves it in
 the Abel Google Drive AUDIO folder.
