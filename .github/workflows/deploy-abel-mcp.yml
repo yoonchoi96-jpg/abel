@@ -48,14 +48,7 @@ PY
           echo "PROJECT_ID=$PROJECT_ID" >> "$GITHUB_ENV"
 
       - name: Deploy Cloud Run
-        env:
-          ABEL_APPS_SCRIPT_URL: ${{ secrets.ABEL_APPS_SCRIPT_URL }}
         run: |
-          test -n "$ABEL_APPS_SCRIPT_URL" || {
-            echo "::error::Missing repository secret ABEL_APPS_SCRIPT_URL."
-            exit 1
-          }
-          export ABEL_APPS_SCRIPT_URL
           chmod +x scripts/deploy_abel_mcp.sh
           ./scripts/deploy_abel_mcp.sh
 
