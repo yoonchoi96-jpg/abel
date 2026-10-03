@@ -16,12 +16,18 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
+      - name: Install ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
       - name: Generate Gemini 3.8 Flash TTS sample
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python scripts/gemini_tts_ab.py
+      - name: Create accelerated HSK6 listening version
+        run: ffmpeg -y -i gemini_tts_hsk6_ab_v4.wav -filter:a "atempo=1.5" -ar 24000 -ac 1 gemini_tts_hsk6_ab_v4_fast.wav
       - uses: actions/upload-artifact@v4
         with:
-          name: gemini-tts-hsk6-ab-v2
-          path: gemini_tts_hsk6_ab_v2.wav
+          name: gemini-tts-hsk6-ab-v4
+          path: |
+            gemini_tts_hsk6_ab_v4.wav
+            gemini_tts_hsk6_ab_v4_fast.wav
           retention-days: 7
