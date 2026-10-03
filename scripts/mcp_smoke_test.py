@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import asyncio
 import json
+import os
 import sys
+import httpx
 
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
@@ -9,8 +11,11 @@ from mcp.client.streamable_http import streamable_http_client
 
 async def main(url: str, call_tool: bool = False):
     print(f"Connecting: {url}")
-    async with streamable_http_client(url) as (read_stream, write_stream, _get_session_id):
-        async with ClientSession(read_stream, write_stream) as session:
+    token = os.environ.get("MCP_AUTH_TOKEN", "").strip()
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    async with httpx.AsyncClient(headers=headers, timeout=120) as http_client:
+        async with streamable_http_client(url, http_client=http_client) as (read_stream, write_stream, _get_session_id):
+            async with ClientSession(read_stream, write_stream) as session:
             print("Initializing...")
             init = await session.initialize()
             print("SERVER:", init.serverInfo)
