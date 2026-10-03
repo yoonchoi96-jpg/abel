@@ -120,3 +120,19 @@ def test_finalize_review_rejects_critical_semantic_issue():
     result = finalize_review({"status": "PASS", "score": 100}, semantic)
     assert result["gate"] == "REVIEW"
     assert not result["release_ready"]
+
+
+def test_compact_chinese_option_labels_are_normalized():
+    qs = [
+        {"number": 1, "part": "listening", "stem": "x", "options": ["A甲", "B甲", "C丙", "D丁"], "answer": "A"},
+    ]
+    report = evaluate_exam(qs)
+    assert any(f["rule_id"] == "DUPLICATE_CONTENT" for f in report["findings"])
+
+
+def test_english_option_starting_with_a_is_not_stripped():
+    qs = [
+        {"number": 1, "part": "listening", "stem": "x", "options": ["Apple", "Book", "Cat", "Dog"], "answer": "A"},
+    ]
+    report = evaluate_exam(qs)
+    assert report["metrics"]["question_count"] == 1
