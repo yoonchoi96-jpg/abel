@@ -292,7 +292,7 @@ def evaluate_exam(
 
     return {
         "engine": "Abel HSK Evaluation Engine",
-        "version": "1.1.0",
+        "version": "1.2.0",
         "status": status,
         "score": max(0, 100 - penalty),
         "metrics": {
@@ -317,6 +317,55 @@ def evaluate_exam(
     }
 
 
+def _validate_deterministic_report(report: dict[str, Any]) -> list[str]:
+    """Validate that a release gate is consuming an actual Abel QA report."""
+    if not isinstance(report, dict):
+        return ["deterministic_report must be a JSON object."]
+
+    required = ("engine", "version", "status", "score", "metrics", "findings")
+    missing = [key for key in required if key not in report]
+    if missing:
+        return [f"Missing deterministic-report fields: {', '.join(missing)}"]
+
+    if report.get("engine") != "Abel HSK Evaluation Engine":
+        return ["deterministic_report.engine is not an Abel evaluation-engine report."]
+
+    if not isinstance(report.get("version"), str) or not report["version"].strip():
+        return ["deterministic_report.version must be a non-empty string."]
+
+    if report.get("status") not in {"PASS", "REVIEW", "FAIL"}:
+        return ["deterministic_report.status must be PASS, REVIEW, or FAIL."]
+
+    score = report.get("score")
+    if not _is_number(score) or not 0 <= score <= 100:
+        return ["deterministic_report.score must be a number from 0 to 100."]
+
+    metrics = report.get("metrics")
+    if not isinstance(metrics, dict):
+        return ["deterministic_report.metrics must be an object."]
+
+    question_count = metrics.get("question_count")
+    question_numbers = metrics.get("question_numbers")
+    if not isinstance(question_count, int) or isinstance(question_count, bool) or question_count < 0:
+        return ["deterministic_report.metrics.question_count must be a non-negative integer."]
+
+    if not isinstance(question_numbers, list) or not all(
+        isinstance(n, int) and not isinstance(n, bool) and n > 0 for n in question_numbers
+    ):
+        return ["deterministic_report.metrics.question_numbers must be an array of positive integers."]
+
+    if len(question_numbers) != question_count:
+        return ["deterministic_report.metrics.question_numbers length must equal question_count."]
+
+    if len(set(question_numbers)) != len(question_numbers):
+        return ["deterministic_report.metrics.question_numbers must be unique."]
+
+    if not isinstance(report.get("findings"), list):
+        return ["deterministic_report.findings must be an array."]
+
+    return []
+
+
 def finalize_review(
     deterministic_report: dict[str, Any],
     semantic_review: dict[str, Any] | None = None,
@@ -326,17 +375,21 @@ def finalize_review(
     Abel does not invent semantic judgments. It only validates the review contract
     and converts the two QA layers into one machine-readable release gate.
     """
-    deterministic_status = deterministic_report.get("status")
-    deterministic_score = deterministic_report.get("score")
+    deterministic_errors = _validate_deterministic_report(deterministic_report)
+    deterministic_status = deterministic_report.get("status") if isinstance(deterministic_report, dict) else None
+    deterministic_score = deterministic_report.get("score") if isinstance(deterministic_report, dict) else None
     result = {
-        "gate": "REVIEW",
+        "gate": "FAIL" if deterministic_errors else "REVIEW",
         "deterministic_status": deterministic_status or "UNKNOWN",
         "semantic_status": "NOT_RUN",
         "score": deterministic_score if _is_number(deterministic_score) else 0,
         "release_ready": False,
-        "critical_issues": [],
+        "critical_issues": deterministic_errors,
         "global_issues": [],
     }
+
+    if deterministic_errors:
+        return result
 
     if deterministic_status == "FAIL":
         result["gate"] = "FAIL"
@@ -344,12 +397,6 @@ def finalize_review(
 
     if deterministic_status != "PASS":
         result["gate"] = "REVIEW"
-        return result
-
-    if not _is_number(deterministic_score) or not 0 <= deterministic_score <= 100:
-        result["gate"] = "FAIL"
-        result["semantic_status"] = "NOT_RUN"
-        result["critical_issues"] = ["deterministic_report.score must be a number from 0 to 100."]
         return result
 
     if semantic_review is None:
