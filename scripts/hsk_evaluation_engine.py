@@ -512,11 +512,23 @@ def finalize_review(
         if status != "pass":
             non_pass_reviews.append(number)
 
+        if "answer" in review and review["answer"] not in {"A", "B", "C", "D"}:
+            result["gate"] = "FAIL"
+            result["semantic_status"] = "INVALID"
+            result["critical_issues"] = [f"Question {number} answer must be A, B, C, or D when supplied."]
+            return result
+
         issues = review.get("issues", [])
         if not _string_list(issues):
             result["gate"] = "FAIL"
             result["semantic_status"] = "INVALID"
             result["critical_issues"] = [f"Question {number} issues must be an array of strings."]
+            return result
+
+        if "recommended_fix" in review and not isinstance(review["recommended_fix"], str):
+            result["gate"] = "FAIL"
+            result["semantic_status"] = "INVALID"
+            result["critical_issues"] = [f"Question {number} recommended_fix must be a string when supplied."]
             return result
 
     review_counts = Counter(review_numbers)
