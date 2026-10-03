@@ -4,7 +4,10 @@ import requests
 from fastmcp import FastMCP
 from starlette.requests import Request
 
-from hsk_evaluation_engine import build_llm_review_prompt, evaluate_exam, finalize_review
+try:
+    from hsk_evaluation_engine import build_llm_review_prompt, evaluate_exam, finalize_review
+except ModuleNotFoundError:
+    from scripts.hsk_evaluation_engine import build_llm_review_prompt, evaluate_exam, finalize_review
 
 mcp = FastMCP("abel_mcp")
 
