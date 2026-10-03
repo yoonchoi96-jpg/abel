@@ -93,7 +93,7 @@ def record_correction(
         raise ValueError("result.cache_key is required.")
 
     original = str(result.get("original") or "").strip()
-    versions = result.get("versions") or {}
+    versions = result.get("versions") or {"minimal_correction": result.get("minimal_correction"), "natural_version": result.get("natural_version"), "advanced_version": result.get("advanced_version")}
     assessment = result.get("assessment") or result.get("hsk") or {}
     if not original or any(not str(versions.get(k) or "").strip()
                            for k in ("minimal_correction", "natural_version", "advanced_version")):
