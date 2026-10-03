@@ -47,3 +47,20 @@ def test_llm_prompt_contains_claude_derived_rules():
     assert "ANSWER UNIQUENESS" in prompt
     assert "PARAPHRASE DEPTH" in prompt
     assert "REGRESSION" in prompt
+
+
+def test_repeated_option_set_across_questions_is_not_duplicate_content():
+    qs = [
+        {"number": 1, "part": "listening", "stem": "first", "options": ["A甲", "B乙", "C丙", "D丁"], "answer": "A"},
+        {"number": 2, "part": "listening", "stem": "second", "options": ["A甲", "B乙", "C丙", "D丁"], "answer": "B"},
+    ]
+    report = evaluate_exam(qs)
+    assert not any(f["rule_id"] == "DUPLICATE_CONTENT" for f in report["findings"])
+
+
+def test_duplicate_option_inside_question_is_flagged():
+    qs = [
+        {"number": 1, "part": "listening", "stem": "x", "options": ["A甲", "B甲", "C丙", "D丁"], "answer": "A"},
+    ]
+    report = evaluate_exam(qs)
+    assert any(f["rule_id"] == "DUPLICATE_CONTENT" for f in report["findings"])
