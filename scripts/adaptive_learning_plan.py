@@ -23,10 +23,13 @@ def build_plan(candidates, limits=None):
             "items":selected,"count":len(selected)}
 
 if __name__=="__main__":
-    p=argparse.ArgumentParser(); p.add_argument("input"); p.add_argument("--out",required=True)
+    p=argparse.ArgumentParser()
+    p.add_argument("input")
+    p.add_argument("--out",required=True)
+    p.add_argument("--limits",help="JSON file containing per-kind limits")
     a=p.parse_args()
     data=json.load(open(a.input,encoding="utf-8"))
     candidates=data.get("items",[]) if isinstance(data,dict) else data
-    limits=json.load(open(a.limits,encoding="utf-8")) if hasattr(a,"limits") and a.limits else {}
+    limits=json.load(open(a.limits,encoding="utf-8")) if a.limits else {}
     json.dump(build_plan(candidates,limits),open(a.out,"w",encoding="utf-8"),ensure_ascii=False,indent=2)
     print(a.out)
