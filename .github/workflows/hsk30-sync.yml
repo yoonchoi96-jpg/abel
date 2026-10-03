@@ -19,16 +19,16 @@ concurrency:
 
 jobs:
   sync:
-    runs-on: [self-hosted, macOS, naver-wordbook]
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Use system Python
-        run: |
-          python3 --version
-          which python3
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
       - name: Sync HSK 3.0
-        run: python3 scripts/hsk30_sync.py --sync
+        run: python scripts/hsk30_sync.py --sync
       - name: Commit HSK database export
         run: |
           git config user.name "abel-bot"
