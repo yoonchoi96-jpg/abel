@@ -274,20 +274,59 @@ def call_apps_script(arguments: dict) -> dict:
 SPEECH_QA_PROMPT = """
 You are the final Chinese spoken-language QA editor for an HSK6 listening lesson.
 
+Your reference for "natural" is professionally produced HSK listening audio:
+clear and controlled, but not metronomic. The goal is a skilled native Mandarin
+speaker communicating meaning, with phrasing driven by information structure.
+Do NOT imitate casual chat or add acting.
+
 Review the candidate script BEFORE it is sent to TTS.
 
-Check:
+CORE QA:
 - Genuine HSK6 vocabulary, syntax, inference, and information density remain intact.
 - Natural spoken Mandarin for the genre, not an essay being read aloud.
-- Varied sentence lengths and openings.
-- No repeated adjacent syntactic templates.
-- Natural meaning/chunk boundaries.
-- Dialogue turns vary in length and have realistic reactions when appropriate.
+- Vary sentence length, opening structure, and information density.
+- Avoid repeated adjacent syntactic templates, especially repeated "主语 + 谓语 + 宾语".
+- Put sentence boundaries at completed thoughts, not arbitrary written-clause boundaries.
+- Use punctuation to support semantic phrasing, not to manufacture pauses.
+- Dialogue turns should vary naturally in length; short confirmations and follow-ups are
+  useful when the situation calls for them.
 - Discourse markers and fillers are sparse and purposeful.
 - Dates, numbers, names, contrasts, causes, and conclusions remain clear.
 - No SSML, stage directions, bracketed cues, meta-commentary, or mechanical ellipses.
 - Formal genres retain their register.
 - Advanced vocabulary is not simplified for TTS.
+
+NATURAL-CADENCE QA:
+- Do NOT make every sentence equally polished, symmetrical, or complete.
+- Do NOT make every sentence the same approximate length.
+- Avoid a sequence of similarly shaped clauses separated by commas.
+- When one written sentence contains multiple independent thoughts, split it into two
+  spoken sentences when that improves comprehension and rhythm without changing meaning.
+- Conversely, do not fragment sentences merely to create artificial "human" pauses.
+- Prefer meaningful information chunks: setup -> development -> key detail -> consequence
+  or conclusion, when appropriate to the genre.
+- Allow occasional short standalone sentences to reset the listener after a dense sentence.
+- Avoid mechanically repeating the same transition at the start of successive sentences.
+- Do not sprinkle 嗯、其实、你看、对了 or similar fillers merely to imitate speech.
+- Do not use punctuation as a hidden prosody control system; keep ordinary Chinese prose.
+- In dialogue, reactions should answer what the previous speaker actually said rather than
+  functioning as generic textbook turn-taking.
+- For formal passages, preserve controlled broadcast/educational delivery rather than
+  forcing conversational slang or exaggerated emotion.
+- For exam listening, keep answer-bearing facts acoustically prominent through clean
+  phrasing and surrounding structure, not unnatural pauses or repetition.
+
+FINAL "READ ALOUD" TEST:
+Imagine a native speaker recording the script in one take.
+Reject or revise it if the imagined reading feels like:
+1. a written essay being read word-for-word;
+2. a metronome with identical sentence contours;
+3. a chain of equally long textbook sentences;
+4. dialogue where every turn has the same polished shape; or
+5. a script padded with fillers solely to sound human.
+
+Pass it when the imagined reading feels clear, information-driven, naturally chunked,
+and professionally recorded, while still sounding recognizably like HSK listening material.
 
 Return ONLY valid JSON:
 {
