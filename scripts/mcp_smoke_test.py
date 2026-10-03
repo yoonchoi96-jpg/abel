@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import asyncio
+import json
 import sys
 
 from mcp import ClientSession
@@ -43,7 +44,15 @@ async def main(url: str, call_tool: bool = False):
             )
             if getattr(qa_result, "is_error", False):
                 raise SystemExit("FAIL: evaluate_hsk_content returned an MCP tool error.")
-            print("PASS: evaluate_hsk_content executed successfully.")
+            qa_payload = json.loads(qa_result.content[0].text)
+            if qa_payload.get("tool_status") != "success":
+                raise SystemExit("FAIL: evaluate_hsk_content did not report tool_status=success.")
+            if qa_payload.get("status") != "PASS":
+                raise SystemExit(
+                    "FAIL: evaluate_hsk_content deterministic status was "
+                    + str(qa_payload.get("status"))
+                )
+            print("PASS: evaluate_hsk_content executed and preserved deterministic QA status.")
 
             gate_result = await session.call_tool(
                 "finalize_hsk_review",
@@ -53,7 +62,12 @@ async def main(url: str, call_tool: bool = False):
             )
             if getattr(gate_result, "is_error", False):
                 raise SystemExit("FAIL: finalize_hsk_review returned an MCP tool error.")
-            print("PASS: finalize_hsk_review executed successfully.")
+            gate_payload = json.loads(gate_result.content[0].text)
+            if gate_payload.get("status") != "success":
+                raise SystemExit("FAIL: finalize_hsk_review did not report status=success.")
+            if gate_payload.get("review", {}).get("gate") != "REVIEW":
+                raise SystemExit("FAIL: finalize_hsk_review incorrectly released without semantic review.")
+            print("PASS: finalize_hsk_review executed and blocked missing semantic review.")
 
             if call_tool:
                 print("\nCALLING generate_lesson_audio...")
