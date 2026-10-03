@@ -11,15 +11,14 @@ SCRIPT = """各位听众，近日，我国首个自主研发的深远海浮式�
 
 据测算，该项目年发电量预计将突破八千万千瓦时，每年可节约标煤约两万四千吨，减少二氧化碳排放近六万吨。业内专家指出，虽然目前深远海风电的初始建造成本依然居高不下，但随着上下游产业链协同效应逐步显现，综合开发成本有望在未来五年内下降百分之三十以上。这一技术的规模化应用，将为沿海经济发达地区的能源结构转型提供强有力的战略支撑。"""
 
-PROMPT = """Read the following Mandarin HSK6 listening script as a skilled native Chinese radio/news presenter speaking to real listeners, not as someone mechanically reading an essay.
+PROMPT = """Read the following Mandarin HSK6 listening script as a skilled native Chinese radio/news presenter speaking to real listeners.
 Use a calm, intelligent, professional broadcast voice. Keep the exact wording and all facts.
-Vary sentence-level intonation naturally according to meaning. Do not give every sentence the same falling contour.
-Give new, contrastive, causal, and concluding information appropriate emphasis without sounding theatrical.
-Keep pauses SHORT and economical. Pause mainly at sentence boundaries or genuinely important information boundaries; do not insert dramatic pauses between ordinary phrases.
-Maintain a fluent educational-radio pace. Do not slow down to emphasize every clause.
-Avoid metronomic timing, evenly spaced pauses, exaggerated emotion, fake hesitation, and unnecessary fillers.
-Target a natural HSK6 listening pace rather than a slow language-learning narration.
-The result should sound like a human professional recording a real educational news segment for HSK6 learners: clear and controlled, but organically paced and expressive."""
+Speak at a normal-to-brisk native Mandarin educational broadcast pace, approximately 230–260 Chinese characters per minute. This is listening practice, not slow language instruction.
+Keep the speech flowing continuously. Do not intentionally slow down, stretch syllables, or insert pauses between ordinary clauses.
+Use only natural brief pauses where punctuation or a major information boundary requires one.
+Vary sentence-level intonation naturally according to meaning. Use pitch, stress, rhythm, and phrasing for emphasis rather than silence.
+Avoid metronomic timing, exaggerated emotion, fake hesitation, unnecessary fillers, and audiobook-style dramatic pacing.
+The result should sound like a real professional Chinese news/educational recording at efficient HSK6 listening speed: clear, fluent, natural, and expressive."""
 
 def main():
     key=os.environ["GEMINI_API_KEY"]
@@ -42,12 +41,12 @@ def main():
     if not isinstance(data, (bytes, bytearray)):
         raise TypeError(f"Unexpected audio payload type: {type(data)}")
     # Gemini TTS returns raw 24 kHz mono PCM for this path.
-    with wave.open("gemini_tts_hsk6_ab_v2.wav","wb") as w:
+    with wave.open("gemini_tts_hsk6_ab_v3.wav","wb") as w:
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(24000); w.writeframes(data)
     duration = len(data) / (24000 * 2)
     print(f"PASS Gemini TTS v2 generated {len(data)} bytes; mime={mime}; duration={duration:.2f}s")
-    if duration < 45 or duration > 150:
-        raise RuntimeError(f"FAIL: duration {duration:.2f}s outside HSK6 target range 45-150s")
+    if duration < 75 or duration > 135:
+        raise RuntimeError(f"FAIL: duration {duration:.2f}s outside HSK6 target range 75-135s")
 
 if __name__=="__main__":
     main()
