@@ -274,3 +274,46 @@ def test_finalize_review_requires_exact_question_review_numbers():
     result = finalize_review(deterministic, semantic)
     assert result["semantic_status"] == "INVALID"
     assert not result["release_ready"]
+
+
+def test_hsk6_part_layout_is_enforced_for_full_exam():
+    qs = []
+    for number in range(1, 101):
+        part = "listening" if number <= 50 else "reading"
+        qs.append({
+            "number": number,
+            "part": part,
+            "stem": str(number),
+            "options": ["A甲", "B乙", "C丙", "D丁"],
+            "answer": "A",
+        })
+    qs.append({
+        "number": 101,
+        "part": "reading",
+        "stem": "writing should be separate",
+        "options": ["A甲", "B乙", "C丙", "D丁"],
+        "answer": "B",
+    })
+    report = evaluate_exam(qs, expected_total=101)
+    assert report["status"] == "FAIL"
+    assert any(f["rule_id"] == "HSK6_PART_LAYOUT" for f in report["findings"])
+
+
+def test_hsk6_part_layout_accepts_exact_full_exam_numbering():
+    qs = []
+    for number in range(1, 102):
+        if number <= 50:
+            part = "listening"
+        elif number <= 100:
+            part = "reading"
+        else:
+            part = "writing"
+        qs.append({
+            "number": number,
+            "part": part,
+            "stem": str(number),
+            "options": ["A甲", "B乙", "C丙", "D丁"],
+            "answer": "A",
+        })
+    report = evaluate_exam(qs, expected_total=101)
+    assert not any(f["rule_id"] == "HSK6_PART_LAYOUT" for f in report["findings"])
