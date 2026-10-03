@@ -9,7 +9,7 @@ import argparse, json
 from datetime import datetime, timezone
 
 SCHEMA="abel.learning.practice.v1"
-KINDS={"listening","reading","writing","mock_test"}
+KINDS={"listening","reading","writing","translation","speaking","mock_test"}
 
 def validate_unit(unit):
     required=("id","kind","language","level","questions")
