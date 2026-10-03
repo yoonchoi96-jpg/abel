@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Persistent local history for Abel Chinese writing correction.
+"""Durable-friendly, language-agnostic learning history for Abel.
 
-The database is intentionally local and ignored by Git. It stores correction
-events and recurring error patterns without storing API credentials.
+SQLite is the local source-of-truth cache. Snapshot/export layers can publish
+language-specific summaries to Google Drive without changing the learning schema.
 """
 
 from __future__ import annotations
@@ -12,7 +12,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+DEFAULT_LANGUAGE = "zh-CN"
 
 
 def connect(db_path: str | Path = "data/abel_learning.db") -> sqlite3.Connection:
@@ -26,6 +27,7 @@ def connect(db_path: str | Path = "data/abel_learning.db") -> sqlite3.Connection
         CREATE TABLE IF NOT EXISTS writing_corrections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             cache_key TEXT NOT NULL UNIQUE,
+            language TEXT NOT NULL DEFAULT 'zh-CN',
             original TEXT NOT NULL,
             minimal_correction TEXT NOT NULL,
             natural_version TEXT NOT NULL,
@@ -66,38 +68,41 @@ def connect(db_path: str | Path = "data/abel_learning.db") -> sqlite3.Connection
             ON writing_issues(issue_type);
         CREATE INDEX IF NOT EXISTS idx_vocab_usage_word
             ON vocabulary_usage(word);
+        CREATE INDEX IF NOT EXISTS idx_writing_language
+            ON writing_corrections(language);
         """
     )
+    # Backward-compatible migration for databases created by v1.
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(writing_corrections)")}
+    if "language" not in cols:
+        conn.execute(
+            "ALTER TABLE writing_corrections ADD COLUMN language TEXT NOT NULL DEFAULT 'zh-CN'"
+        )
+        conn.commit()
     return conn
 
 
 def record_correction(
     result: dict[str, Any],
     *,
+    language: str = DEFAULT_LANGUAGE,
     db_path: str | Path = "data/abel_learning.db",
 ) -> int:
-    """Insert one validated correction and its issue/vocabulary events.
-
-    Existing cache_key rows are not duplicated. Returns the correction id.
-    """
     cache_key = str(result.get("cache_key") or "").strip()
     if not cache_key:
         raise ValueError("result.cache_key is required.")
 
     original = str(result.get("original") or "").strip()
     versions = result.get("versions") or {}
-    overall = result.get("overall") or {}
-    hsk = result.get("hsk") or {}
-
-    required_versions = ("minimal_correction", "natural_version", "advanced_version")
-    if not original or any(not str(versions.get(k) or "").strip() for k in required_versions):
+    assessment = result.get("assessment") or result.get("hsk") or {}
+    if not original or any(not str(versions.get(k) or "").strip()
+                           for k in ("minimal_correction", "natural_version", "advanced_version")):
         raise ValueError("original and all correction versions are required.")
 
     conn = connect(db_path)
     try:
         row = conn.execute(
-            "SELECT id FROM writing_corrections WHERE cache_key = ?",
-            (cache_key,),
+            "SELECT id FROM writing_corrections WHERE cache_key = ?", (cache_key,)
         ).fetchone()
         if row:
             return int(row["id"])
@@ -105,21 +110,22 @@ def record_correction(
         cur = conn.execute(
             """
             INSERT INTO writing_corrections (
-                cache_key, original, minimal_correction, natural_version,
-                advanced_version, target_level, register_name, hsk_score,
-                severity, confidence, engine_version, prompt_version, result_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                cache_key, language, original, minimal_correction, natural_version,
+                advanced_version, target_level, register_name, hsk_score, severity,
+                confidence, engine_version, prompt_version, result_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 cache_key,
+                str(result.get("language") or language or DEFAULT_LANGUAGE),
                 original,
                 versions["minimal_correction"],
                 versions["natural_version"],
                 versions["advanced_version"],
-                str(hsk.get("target_level") or "HSK6"),
+                str(assessment.get("target_level") or result.get("target_level") or "GENERAL"),
                 str(result.get("register") or "neutral"),
-                hsk.get("score"),
-                str(overall.get("severity") or "none"),
+                assessment.get("score"),
+                str((result.get("overall") or {}).get("severity") or "none"),
                 str(result.get("confidence") or "unknown"),
                 str(result.get("version") or ""),
                 str(result.get("prompt_version") or ""),
@@ -132,16 +138,14 @@ def record_correction(
             if not isinstance(issue, dict):
                 continue
             conn.execute(
-                """
-                INSERT INTO writing_issues (
-                    correction_id, issue_type, severity, original_span, correction, rule
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                """,
+                """INSERT INTO writing_issues
+                   (correction_id, issue_type, severity, original_span, correction, rule)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
                 (
                     correction_id,
                     str(issue.get("type") or "unknown"),
                     str(issue.get("severity") or "minor"),
-                    str(issue.get("span") or ""),
+                    str(issue.get("span") or issue.get("original") or ""),
                     str(issue.get("correction") or ""),
                     str(issue.get("rule") or ""),
                 ),
@@ -151,11 +155,9 @@ def record_correction(
             if not isinstance(usage, dict) or not str(usage.get("word") or "").strip():
                 continue
             conn.execute(
-                """
-                INSERT INTO vocabulary_usage (
-                    correction_id, word, word_id, status, note_ko
-                ) VALUES (?, ?, ?, ?, ?)
-                """,
+                """INSERT INTO vocabulary_usage
+                   (correction_id, word, word_id, status, note_ko)
+                   VALUES (?, ?, ?, ?, ?)""",
                 (
                     correction_id,
                     str(usage["word"]),
@@ -171,37 +173,42 @@ def record_correction(
         conn.close()
 
 
-def error_summary(*, db_path: str | Path = "data/abel_learning.db") -> list[dict[str, Any]]:
-    """Return recurring issue types ordered by occurrence."""
+def error_summary(*, language: str | None = None, db_path: str | Path = "data/abel_learning.db") -> list[dict[str, Any]]:
     conn = connect(db_path)
     try:
-        rows = conn.execute(
-            """
-            SELECT issue_type, severity, COUNT(*) AS count
-            FROM writing_issues
-            GROUP BY issue_type, severity
-            ORDER BY count DESC, issue_type ASC
-            """
-        ).fetchall()
+        if language:
+            rows = conn.execute(
+                """SELECT w.issue_type, w.severity, COUNT(*) AS count
+                   FROM writing_issues w JOIN writing_corrections c ON c.id=w.correction_id
+                   WHERE c.language=? GROUP BY w.issue_type,w.severity
+                   ORDER BY count DESC,w.issue_type ASC""", (language,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT issue_type, severity, COUNT(*) AS count
+                   FROM writing_issues GROUP BY issue_type,severity
+                   ORDER BY count DESC,issue_type ASC"""
+            ).fetchall()
         return [dict(row) for row in rows]
     finally:
         conn.close()
 
 
-def vocabulary_summary(*, db_path: str | Path = "data/abel_learning.db") -> list[dict[str, Any]]:
-    """Return words most often used incorrectly or awkwardly in writing."""
+def vocabulary_summary(*, language: str | None = None, db_path: str | Path = "data/abel_learning.db") -> list[dict[str, Any]]:
     conn = connect(db_path)
     try:
+        where = "WHERE c.language=?" if language else ""
+        params = (language,) if language else ()
         rows = conn.execute(
-            """
-            SELECT word,
-                   SUM(CASE WHEN status = 'incorrect' THEN 1 ELSE 0 END) AS incorrect_count,
-                   SUM(CASE WHEN status = 'awkward' THEN 1 ELSE 0 END) AS awkward_count,
-                   COUNT(*) AS total_uses
-            FROM vocabulary_usage
-            GROUP BY word
-            ORDER BY incorrect_count DESC, awkward_count DESC, total_uses DESC, word ASC
-            """
+            f"""SELECT v.word,
+                       SUM(CASE WHEN v.status='incorrect' THEN 1 ELSE 0 END) AS incorrect_count,
+                       SUM(CASE WHEN v.status='awkward' THEN 1 ELSE 0 END) AS awkward_count,
+                       COUNT(*) AS total_uses
+                FROM vocabulary_usage v JOIN writing_corrections c ON c.id=v.correction_id
+                {where}
+                GROUP BY v.word
+                ORDER BY incorrect_count DESC,awkward_count DESC,total_uses DESC,v.word ASC""",
+            params,
         ).fetchall()
         return [dict(row) for row in rows]
     finally:
