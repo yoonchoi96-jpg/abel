@@ -1,0 +1,60 @@
+# Abel HSK Evaluation Engine v1.0
+
+Abel's HSK QA is deliberately split into two layers.
+
+## Layer 1 — deterministic QA
+
+`scripts/hsk_evaluation_engine.py` checks properties that do not require an LLM:
+
+- answer distribution
+- repeated answer runs
+- question count and part ranges
+- malformed questions/options
+- duplicate stems/options
+- concentration of absolute/extreme wording in distractors
+- correct-option-as-uniquely-longest bias
+- option length outliers
+- surface/grammar-shape leakage
+
+These are warnings unless the structure is invalid; they are not claims that an individual question is semantically wrong.
+
+## Layer 2 — semantic/expert QA
+
+The same module builds a Gemini-ready adversarial review prompt covering recurring expert-review findings:
+
+- answer uniqueness / multiple valid answers
+- distractor plausibility
+- copied wording / shallow paraphrase
+- transcript-question-answer consistency
+- explanation consistency with the current revision
+- natural contemporary Mandarin
+- factual accuracy requiring verification
+- repeated error-type design
+- one-token/one-blank triviality
+- regression after a revision
+
+The deterministic report tells the reviewer what can be measured, while the LLM layer decides what requires linguistic or semantic judgment.
+
+## MCP
+
+`evaluate_hsk_content` is exposed by `scripts/abel_mcp_server.py`.
+
+Inputs:
+- `questions_json`: JSON array of question objects
+- `transcript`: optional source transcript
+- `reference_facts`: optional fact/reference notes
+- `expected_total`: optional expected question count
+- `expected_distribution_json`: optional expected answer distribution, e.g. `{"A":22,"B":23,"C":23,"D":22}`
+
+The tool returns the deterministic report plus `semantic_review_prompt`.
+
+## Intended generation loop
+
+1. Gemini Spark generates the mock exam.
+2. Abel deterministic QA runs.
+3. Gemini performs semantic/expert QA using the returned review prompt.
+4. Failures are revised.
+5. Abel QA runs again.
+6. The revised version is checked for regression before acceptance.
+
+Abel must never treat a single reviewer comment as a permanent prohibition. New reviewer feedback should be generalized only when it represents a reusable evaluation rule.
