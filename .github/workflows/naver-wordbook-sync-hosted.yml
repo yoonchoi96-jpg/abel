@@ -1,0 +1,82 @@
+name: Naver Wordbook Sync (GitHub-hosted)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Run mode
+        required: true
+        default: sync
+        type: choice
+        options:
+          - sync
+          - probe
+
+permissions:
+  contents: write
+
+concurrency:
+  group: naver-wordbook-sync-gh
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Restore authenticated Naver session
+        env:
+          NAVER_STORAGE_STATE_B64: ${{ secrets.NAVER_STORAGE_STATE_B64 }}
+        run: |
+          test -n "$NAVER_STORAGE_STATE_B64" || {
+            echo "::error::Missing NAVER_STORAGE_STATE_B64 repository secret."
+            echo "Create it once from the authenticated Mac profile using scripts/export_naver_storage_state.py."
+            exit 1
+          }
+          python3 - <<'PY'
+import base64, os
+raw = base64.b64decode(os.environ["NAVER_STORAGE_STATE_B64"])
+# Validate before the sync starts; the actual collector receives the same secret.
+import json
+json.loads(raw.decode("utf-8"))
+print(f"Validated Naver storage state ({len(raw)} bytes).")
+PY
+
+      - name: Sync Naver wordbooks
+        env:
+          NAVER_STORAGE_STATE_B64: ${{ secrets.NAVER_STORAGE_STATE_B64 }}
+          NAVER_WORDBOOK_EXPORT: data/naver_wordbook.json
+          NAVER_BROWSER: chromium
+        run: |
+          MODE="sync"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            MODE="${{ inputs.mode }}"
+          fi
+          python scripts/naver_wordbook_sync.py --"$MODE"
+
+      - name: Commit canonical export
+        if: ${{ inputs.mode == 'sync' }}
+        run: |
+          git config user.name "abel-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/naver_wordbook.json
+          if git diff --cached --quiet; then
+            echo "No wordbook changes."
+            exit 0
+          fi
+          git commit -m "chore: sync NAVER wordbook (hosted)"
+          git push
