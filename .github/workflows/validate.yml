@@ -49,8 +49,6 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8080/ | grep -q '"status":"online"'
           python scripts/mcp_smoke_test.py http://127.0.0.1:8080/mcp
-        env:
-          ABEL_APPS_SCRIPT_URL: https://example.com/abel-apps-script
 
       - name: Show MCP logs on failure
         if: failure()
