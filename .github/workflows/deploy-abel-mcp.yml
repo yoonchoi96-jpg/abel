@@ -1,9 +1,6 @@
 name: Deploy Abel MCP
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch: {}
 
 jobs:
@@ -26,20 +23,13 @@ jobs:
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
         run: |
-          test -n "$GCP_SA_KEY" || {
-            echo "::error::Missing repository secret GCP_SA_KEY. Add it under Settings > Secrets and variables > Actions."
-            exit 1
-          }
+          test -n "$GCP_SA_KEY"
           PROJECT_ID="$(python3 - <<'PY'
 import json, os
-data=json.loads(os.environ["GCP_SA_KEY"])
-print(data.get("project_id", ""))
+print(json.loads(os.environ["GCP_SA_KEY"]).get("project_id", ""))
 PY
 )"
-          test -n "$PROJECT_ID" || {
-            echo "::error::GCP_SA_KEY JSON has no project_id."
-            exit 1
-          }
+          test -n "$PROJECT_ID"
           gcloud config set project "$PROJECT_ID"
           echo "PROJECT_ID=$PROJECT_ID" >> "$GITHUB_ENV"
 
