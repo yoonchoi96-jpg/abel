@@ -13,6 +13,10 @@ except ModuleNotFoundError:
 
 APPS_SCRIPT_URL = os.environ["ABEL_APPS_SCRIPT_URL"]
 MCP_AUTH_TOKEN = os.environ.get("MCP_AUTH_TOKEN", "")
+MAX_LESSON_CHARS = 20000
+MAX_QUESTIONS_JSON_CHARS = 2_000_000
+MAX_REFERENCE_TEXT_CHARS = 200_000
+MAX_QUESTIONS = 500
 
 if MCP_AUTH_TOKEN:
     mcp_auth = StaticTokenVerifier(
@@ -32,6 +36,15 @@ def generate_lesson_audio(
 ) -> dict:
     """Generate a Chinese listening lesson MP3 and save it to Abel Google Drive."""
 
+    text = (text or "").strip()
+    if not text:
+        return {"status": "error", "message": "Lesson text is required."}
+    if len(text) > MAX_LESSON_CHARS:
+        return {
+            "status": "error",
+            "message": f"Lesson text exceeds the {MAX_LESSON_CHARS}-character limit.",
+        }
+
     payload = {
         "action": "generate-lesson-audio",
         "text": text,
@@ -40,18 +53,32 @@ def generate_lesson_audio(
         "topic": topic,
     }
 
-    response = requests.post(
-        APPS_SCRIPT_URL,
-        json=payload,
-        headers={"Content-Type": "application/json"},
-        allow_redirects=False,
-        timeout=120,
-    )
+    try:
+        response = requests.post(
+            APPS_SCRIPT_URL,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            allow_redirects=False,
+            timeout=120,
+        )
+    except requests.RequestException as exc:
+        return {
+            "status": "error",
+            "stage": "apps_script_request",
+            "message": f"Apps Script request failed: {exc}",
+        }
 
     location = response.headers.get("Location")
 
     if response.status_code in (301, 302, 303, 307, 308) and location:
-        response = requests.get(location, timeout=120)
+        try:
+            response = requests.get(location, timeout=120)
+        except requests.RequestException as exc:
+            return {
+                "status": "error",
+                "stage": "apps_script_redirect",
+                "message": f"Apps Script redirect request failed: {exc}",
+            }
 
     if response.status_code != 200:
         return {
@@ -86,6 +113,12 @@ def evaluate_hsk_content(
     returned as a Gemini-ready review prompt rather than guessed by Python.
     """
 
+    if len(questions_json) > MAX_QUESTIONS_JSON_CHARS:
+        return {
+            "status": "error",
+            "message": f"questions_json exceeds the {MAX_QUESTIONS_JSON_CHARS}-character limit.",
+        }
+
     try:
         questions = json.loads(questions_json)
     except json.JSONDecodeError as exc:
@@ -98,6 +131,18 @@ def evaluate_hsk_content(
         return {
             "status": "error",
             "message": "questions_json must decode to a JSON array.",
+        }
+
+    if len(questions) > MAX_QUESTIONS:
+        return {
+            "status": "error",
+            "message": f"questions_json exceeds the {MAX_QUESTIONS}-question limit.",
+        }
+
+    if len(transcript) > MAX_REFERENCE_TEXT_CHARS or len(reference_facts) > MAX_REFERENCE_TEXT_CHARS:
+        return {
+            "status": "error",
+            "message": f"transcript and reference_facts are each limited to {MAX_REFERENCE_TEXT_CHARS} characters.",
         }
 
     if any(not isinstance(q, dict) for q in questions):
