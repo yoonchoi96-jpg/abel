@@ -1,7 +1,10 @@
+import json
 import os
 import requests
 from fastmcp import FastMCP
 from starlette.requests import Request
+
+from hsk_evaluation_engine import build_llm_review_prompt, evaluate_exam
 
 mcp = FastMCP("abel_mcp")
 
@@ -54,6 +57,48 @@ def generate_lesson_audio(
             "message": "Apps Script returned non-JSON data.",
             "raw_response": response.text[:3000],
         }
+
+
+@mcp.tool()
+def evaluate_hsk_content(
+    questions_json: str,
+    transcript: str = "",
+    reference_facts: str = "",
+    expected_total: int = 0,
+) -> dict:
+    """Run Abel's deterministic HSK exam QA and return the semantic-review prompt.
+
+    questions_json must be a JSON array of question objects. Deterministic checks cover
+    answer distribution, repeated answer runs, option-length/shape leakage, extreme-word
+    distractor bias, duplicates, malformed options, and part ranges. Semantic checks are
+    returned as a Gemini-ready review prompt rather than guessed by Python.
+    """
+
+    try:
+        questions = json.loads(questions_json)
+    except json.JSONDecodeError as exc:
+        return {
+            "status": "error",
+            "message": f"questions_json is invalid JSON: {exc}",
+        }
+
+    if not isinstance(questions, list):
+        return {
+            "status": "error",
+            "message": "questions_json must decode to a JSON array.",
+        }
+
+    report = evaluate_exam(
+        questions,
+        expected_total=expected_total or None,
+    )
+    report["semantic_review_prompt"] = build_llm_review_prompt(
+        questions,
+        transcript=transcript,
+        reference_facts=reference_facts,
+    )
+    report["status"] = "success"
+    return report
 
 
 @mcp.custom_route("/", methods=["GET"])
