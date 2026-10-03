@@ -106,7 +106,9 @@ def test_finalize_review_requires_semantic_pass_for_release():
         "pass": True,
         "score": 96,
         "critical_issues": [],
-        "question_reviews": [],
+        "question_reviews": [
+            {"number": 1, "status": "pass", "issues": []},
+        ],
         "global_issues": [],
         "factual_verification_needed": [],
     }
@@ -121,7 +123,9 @@ def test_finalize_review_rejects_critical_semantic_issue():
         "pass": True,
         "score": 96,
         "critical_issues": ["Question 7 has two valid answers."],
-        "question_reviews": [],
+        "question_reviews": [
+            {"number": 1, "status": "pass", "issues": []},
+        ],
         "global_issues": [],
         "factual_verification_needed": [],
     }
@@ -203,7 +207,9 @@ def test_finalize_review_blocks_unresolved_factual_verification():
         "pass": True,
         "score": 99,
         "critical_issues": [],
-        "question_reviews": [],
+        "question_reviews": [
+            {"number": 1, "status": "pass", "issues": []},
+        ],
         "global_issues": [],
         "factual_verification_needed": ["Verify the historical date."],
     }
