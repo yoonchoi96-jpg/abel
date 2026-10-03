@@ -21,17 +21,39 @@ async def main(url: str, call_tool: bool = False):
             print("TOOLS:")
             for tool in tools:
                 print(f"  - {tool.name}")
-                if tool.name == "generate_lesson_audio":
+                if tool.name in {"generate_lesson_audio", "evaluate_hsk_content", "finalize_hsk_review"}:
                     print("    description:", tool.description)
                     print("    input_schema:", tool.inputSchema)
 
             names = [t.name for t in tools]
-            if "generate_lesson_audio" not in names:
+            required = {"generate_lesson_audio", "evaluate_hsk_content", "finalize_hsk_review"}
+            missing = required.difference(names)
+            if missing:
                 raise SystemExit(
-                    "FAIL: generate_lesson_audio is NOT exposed by the live MCP server."
+                    "FAIL: required Abel MCP tools are missing: " + ", ".join(sorted(missing))
                 )
 
-            print("PASS: generate_lesson_audio is exposed by the live MCP server.")
+            print("PASS: audio + HSK evaluation + final-gate tools are exposed by the live MCP server.")
+
+            qa_result = await session.call_tool(
+                "evaluate_hsk_content",
+                {
+                    "questions_json": '[{"number":1,"part":"listening","stem":"测试","options":["A甲","B乙","C丙","D丁"],"answer":"A"}]'
+                },
+            )
+            if getattr(qa_result, "is_error", False):
+                raise SystemExit("FAIL: evaluate_hsk_content returned an MCP tool error.")
+            print("PASS: evaluate_hsk_content executed successfully.")
+
+            gate_result = await session.call_tool(
+                "finalize_hsk_review",
+                {
+                    "deterministic_report_json": '{"status":"PASS","score":100}',
+                },
+            )
+            if getattr(gate_result, "is_error", False):
+                raise SystemExit("FAIL: finalize_hsk_review returned an MCP tool error.")
+            print("PASS: finalize_hsk_review executed successfully.")
 
             if call_tool:
                 print("\nCALLING generate_lesson_audio...")
