@@ -12,6 +12,7 @@ on:
 
 jobs:
   deploy:
+    if: ${{ secrets.GCP_SA_KEY != '' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
