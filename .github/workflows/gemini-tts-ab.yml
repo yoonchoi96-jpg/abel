@@ -23,11 +23,11 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python scripts/gemini_tts_ab.py
       - name: Create accelerated HSK6 listening version
-        run: ffmpeg -y -i gemini_tts_hsk6_ab_v4.wav -filter:a "atempo=1.5" -ar 24000 -ac 1 gemini_tts_hsk6_ab_v4_fast.wav
+        run: ffmpeg -y -i gemini_tts_hsk6_conversational.wav -filter:a "atempo=1.5" -ar 24000 -ac 1 gemini_tts_hsk6_conversational_fast.wav
       - uses: actions/upload-artifact@v4
         with:
-          name: gemini-tts-hsk6-ab-v4
+          name: gemini-tts-hsk6-conversational
           path: |
-            gemini_tts_hsk6_ab_v4.wav
-            gemini_tts_hsk6_ab_v4_fast.wav
+            gemini_tts_hsk6_conversational.wav
+            gemini_tts_hsk6_conversational_fast.wav
           retention-days: 7
