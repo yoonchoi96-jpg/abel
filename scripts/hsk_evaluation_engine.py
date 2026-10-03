@@ -64,18 +64,24 @@ def _answer_letter(value: Any) -> str | None:
 def _option_text(option: Any) -> str:
     text = str(option).strip()
     # Accept common labels without corrupting ordinary option text.
-    text = re.sub(r"^[\s【\[]*[ABCD](?:[\.、:：\)）]|\s+)", "", text, count=1, flags=re.I)
+    text = re.sub(r"^[\s【\[]*[ABCD](?:[】\]][\.、:：\)）]|[\.、:：\)）]|\s+)", "", text, count=1, flags=re.I)
     if len(text) >= 2 and text[0].upper() in "ABCD" and re.match(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]", text[1]):
         text = text[1:]
     return text
 
 
 def _question_number(value: Any) -> int | None:
-    try:
-        number = int(value)
-    except (TypeError, ValueError):
+    if isinstance(value, bool):
         return None
-    return number if number > 0 else None
+    if isinstance(value, int):
+        return value if value > 0 else None
+    if isinstance(value, str):
+        text = value.strip()
+        if not re.fullmatch(r"\d+", text):
+            return None
+        number = int(text)
+        return number if number > 0 else None
+    return None
 
 
 def _is_number(value: Any) -> bool:
