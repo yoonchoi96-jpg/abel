@@ -7,7 +7,10 @@ prompts. It only binds already indexed units to an official exam profile.
 from __future__ import annotations
 import argparse, json
 from pathlib import Path
-from mock_test_engine import validate_mock
+try:
+    from .mock_test_engine import validate_mock
+except ImportError:
+    from mock_test_engine import validate_mock
 
 SUPPORTED_KINDS=("listening","reading","writing","translation","speaking")
 
