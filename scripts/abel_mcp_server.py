@@ -8,8 +8,10 @@ from fastmcp.server.auth import StaticTokenVerifier
 
 try:
     from hsk_evaluation_engine import build_llm_review_prompt, evaluate_exam, finalize_review
+    from writing_correction_engine import make_correction_envelope, validate_correction
 except ModuleNotFoundError:
     from scripts.hsk_evaluation_engine import build_llm_review_prompt, evaluate_exam, finalize_review
+    from scripts.writing_correction_engine import make_correction_envelope, validate_correction
 
 APPS_SCRIPT_URL = os.environ["ABEL_APPS_SCRIPT_URL"]
 MCP_AUTH_TOKEN = os.environ.get("MCP_AUTH_TOKEN", "")
@@ -25,6 +27,59 @@ if MCP_AUTH_TOKEN:
     mcp = FastMCP("abel_mcp", auth=mcp_auth)
 else:
     mcp = FastMCP("abel_mcp")
+
+
+@mcp.tool()
+def prepare_chinese_writing_correction(
+    text: str,
+    target_level: str = "HSK6",
+    register: str = "neutral",
+    context: str = "",
+    known_words_json: str = "[]",
+) -> dict:
+    """Prepare a cached, machine-readable Chinese writing correction request.
+
+    The tool deliberately returns a model-ready contract instead of silently
+    inventing linguistic judgments. A Gemini/Gem education layer can execute the
+    returned prompt and then validate the JSON with validate_chinese_writing_correction.
+    """
+    try:
+        known_words = json.loads(known_words_json or "[]")
+    except json.JSONDecodeError as exc:
+        return {"status": "error", "message": f"known_words_json is invalid JSON: {exc}"}
+    if not isinstance(known_words, list):
+        return {"status": "error", "message": "known_words_json must decode to an array."}
+
+    try:
+        return make_correction_envelope(
+            text,
+            target_level=target_level,
+            register=register,
+            context=context,
+            known_words=known_words,
+        )
+    except ValueError as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+@mcp.tool()
+def validate_chinese_writing_correction(
+    original: str,
+    result_json: str,
+) -> dict:
+    """Validate a model-produced Abel writing-correction JSON contract."""
+    try:
+        result = json.loads(result_json)
+    except json.JSONDecodeError as exc:
+        return {"status": "error", "message": f"result_json is invalid JSON: {exc}"}
+
+    errors = validate_correction(result, original)
+    return {
+        "status": "success" if not errors else "invalid",
+        "valid": not errors,
+        "errors": errors,
+        "cache_key": result.get("cache_key") if isinstance(result, dict) else None,
+    }
 
 
 @mcp.tool()
