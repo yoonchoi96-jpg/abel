@@ -57,8 +57,9 @@ def _answer_letter(value: Any) -> str | None:
 
 def _option_text(option: Any) -> str:
     text = str(option).strip()
-    # Accept common HSK option labels: A. text, A、text, A) text, or Atext.
-    return re.sub(r"^[\s【\[]*[ABCD](?:[\.、:：\)）\s]+|(?=[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]))", "", text, flags=re.I)
+    # Accept common labels without corrupting ordinary option text.
+    text = re.sub(r"^[\s【\[]*[ABCD](?:[\.、:：\)）]|\s+)", "", text, count=1, flags=re.I)
+    return text
 
 
 def _chinese_len(text: str) -> int:
