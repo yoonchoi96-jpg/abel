@@ -25,7 +25,7 @@ jobs:
         run: |
           python - <<'PY'
           import scripts.abel_mcp_server as server
-          required = {"generate_lesson_audio", "evaluate_hsk_content", "finalize_hsk_review"}
+          required = {"generate_lesson_audio", "evaluate_hsk_content", "finalize_hsk_review", "prepare_chinese_writing_correction", "validate_chinese_writing_correction"}
           missing = {name for name in required if not hasattr(server, name)}
           if missing:
               raise SystemExit(f"Missing MCP tool functions: {sorted(missing)}")
