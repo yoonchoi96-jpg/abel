@@ -41,12 +41,16 @@ PY
           echo "PROJECT_ID=$PROJECT_ID" >> "$GITHUB_ENV"
 
       - name: Deploy Cloud Run
+        env:
+          MCP_AUTH_TOKEN: ${{ secrets.MCP_AUTH_TOKEN }}
         run: |
           chmod +x scripts/deploy_abel_mcp.sh
           ./scripts/deploy_abel_mcp.sh
 
       - name: Verify live MCP surface
+        env:
+          MCP_AUTH_TOKEN: ${{ secrets.MCP_AUTH_TOKEN }}
         run: |
           URL="$(gcloud run services describe abel-mcp --region asia-northeast3 --format='value(status.url)')"
-          python3 -m pip install --quiet "mcp>=1.9,<2"
+          python3 -m pip install --quiet "mcp>=1.9,<2" "httpx>=0.28,<1"
           python3 scripts/mcp_smoke_test.py "$URL/mcp"
