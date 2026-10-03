@@ -38,7 +38,7 @@ KST = ZoneInfo("Asia/Seoul")
 
 SYSTEM_PROMPT = """
 AUDIO DELIVERY PROFILE POLICY
-"""Abel audio delivery profiles.
+Abel audio delivery profiles.
 
 These profiles are the canonical style formulas used by lesson generation and
 spoken-language QA. A lesson has exactly one primary delivery_mode unless a
