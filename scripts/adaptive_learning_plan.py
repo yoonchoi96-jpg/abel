@@ -8,7 +8,7 @@ import argparse, json
 from datetime import datetime, timezone
 
 SCHEMA="abel.learning.plan.v1"
-KINDS=("listening","reading","writing","mock_test")
+KINDS=("listening","reading","writing","translation","speaking","mock_test")
 
 def build_plan(candidates, limits=None):
     limits=limits or {}
