@@ -15,8 +15,10 @@ PROMPT = """Read the following Mandarin HSK6 listening script as a skilled nativ
 Use a calm, intelligent, professional broadcast voice. Keep the exact wording and all facts.
 Vary sentence-level intonation naturally according to meaning. Do not give every sentence the same falling contour.
 Give new, contrastive, causal, and concluding information appropriate emphasis without sounding theatrical.
-Use natural Mandarin phrasing and breath-group timing: brief pauses at meaningful information boundaries, slightly longer resets after dense paragraphs, and smooth linking within a phrase.
+Keep pauses SHORT and economical. Pause mainly at sentence boundaries or genuinely important information boundaries; do not insert dramatic pauses between ordinary phrases.
+Maintain a fluent educational-radio pace. Do not slow down to emphasize every clause.
 Avoid metronomic timing, evenly spaced pauses, exaggerated emotion, fake hesitation, and unnecessary fillers.
+Target a natural HSK6 listening pace rather than a slow language-learning narration.
 The result should sound like a human professional recording a real educational news segment for HSK6 learners: clear and controlled, but organically paced and expressive."""
 
 def main():
@@ -40,9 +42,12 @@ def main():
     if not isinstance(data, (bytes, bytearray)):
         raise TypeError(f"Unexpected audio payload type: {type(data)}")
     # Gemini TTS returns raw 24 kHz mono PCM for this path.
-    with wave.open("gemini_tts_hsk6_ab.wav","wb") as w:
+    with wave.open("gemini_tts_hsk6_ab_v2.wav","wb") as w:
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(24000); w.writeframes(data)
-    print(f"PASS Gemini TTS generated {len(data)} bytes; mime={mime}")
+    duration = len(data) / (24000 * 2)
+print(f"PASS Gemini TTS v2 generated {len(data)} bytes; mime={mime}; duration={duration:.2f}s")
+if duration < 45 or duration > 150:
+    raise RuntimeError(f"FAIL: duration {duration:.2f}s outside HSK6 target range 45-150s")
 
 if __name__=="__main__":
     main()
