@@ -1,4 +1,4 @@
-# Abel HSK Evaluation Engine v1.1
+# Abel HSK Evaluation Engine v1.2
 
 Abel's HSK QA is deliberately split into two layers.
 
@@ -37,7 +37,7 @@ The deterministic report tells the reviewer what can be measured, while the LLM 
 
 ## MCP
 
-`evaluate_hsk_content` is exposed by `scripts/abel_mcp_server.py`.
+`evaluate_hsk_content` is exposed by `scripts/abel_mcp_server.py`. For a full HSK6 exam (`expected_total=101`), Abel also validates the exact 1–50 listening, 51–100 reading, 101 writing number layout.
 
 Inputs:
 - `questions_json`: JSON array of question objects
@@ -99,3 +99,10 @@ The release gate is therefore a composition of deterministic QA plus complete se
 ## CI parity
 
 The validation workflow installs both the general project dependencies and the production MCP dependency set from requirements-mcp.txt, then imports the production MCP server and checks that the three required tool functions register before running the full test suite.
+
+
+## MCP transport and security
+
+The production server exposes a JSON health endpoint at `/`. The CI pipeline starts the real server process and runs the MCP smoke test against `http://127.0.0.1:8080/mcp`, in addition to unit tests and import checks.
+
+`MCP_AUTH_TOKEN` is optional. When present, Abel configures FastMCP static Bearer-token authentication; when absent, the existing unauthenticated development behavior is preserved. The deployment script forwards the token only when the environment variable is set. The token should be provisioned as a runtime secret rather than committed to the repository.
