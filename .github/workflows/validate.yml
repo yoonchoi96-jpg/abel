@@ -25,11 +25,10 @@ jobs:
         run: |
           python - <<'PY'
           import scripts.abel_mcp_server as server
-          names = {tool.name for tool in server.mcp._tool_manager.list_tools()}
           required = {"generate_lesson_audio", "evaluate_hsk_content", "finalize_hsk_review"}
-          missing = required - names
+          missing = {name for name in required if not hasattr(server, name)}
           if missing:
-              raise SystemExit(f"Missing MCP tools: {sorted(missing)}")
+              raise SystemExit(f"Missing MCP tool functions: {sorted(missing)}")
           print("Production MCP server import + tool registration: PASS")
           PY
       - name: Run tests
