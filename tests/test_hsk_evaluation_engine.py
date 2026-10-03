@@ -353,3 +353,35 @@ def test_question_number_boolean_is_rejected():
     ])
     assert report["status"] == "FAIL"
     assert any(f["rule_id"] == "STRUCT_MALFORMED" for f in report["findings"])
+
+
+def test_finalize_review_rejects_invalid_question_answer_field():
+    semantic = {
+        "pass": True,
+        "score": 99,
+        "critical_issues": [],
+        "question_reviews": [
+            {"number": 1, "status": "pass", "answer": "E", "issues": []},
+        ],
+        "global_issues": [],
+        "factual_verification_needed": [],
+    }
+    result = finalize_review(_passing_deterministic_report(), semantic)
+    assert result["semantic_status"] == "INVALID"
+    assert not result["release_ready"]
+
+
+def test_finalize_review_rejects_non_string_recommended_fix():
+    semantic = {
+        "pass": True,
+        "score": 99,
+        "critical_issues": [],
+        "question_reviews": [
+            {"number": 1, "status": "pass", "issues": [], "recommended_fix": None},
+        ],
+        "global_issues": [],
+        "factual_verification_needed": [],
+    }
+    result = finalize_review(_passing_deterministic_report(), semantic)
+    assert result["semantic_status"] == "INVALID"
+    assert not result["release_ready"]
