@@ -9,9 +9,11 @@ from fastmcp.server.auth import StaticTokenVerifier
 try:
     from hsk_evaluation_engine import build_llm_review_prompt, evaluate_exam, finalize_review
     from writing_correction_engine import make_correction_envelope, validate_correction
+    from multilingual_writing_engine import make_envelope as make_multilingual_envelope, validate_result as validate_multilingual_result
 except ModuleNotFoundError:
     from scripts.hsk_evaluation_engine import build_llm_review_prompt, evaluate_exam, finalize_review
     from scripts.writing_correction_engine import make_correction_envelope, validate_correction
+    from scripts.multilingual_writing_engine import make_envelope as make_multilingual_envelope, validate_result as validate_multilingual_result
 
 APPS_SCRIPT_URL = os.environ["ABEL_APPS_SCRIPT_URL"]
 MCP_AUTH_TOKEN = os.environ.get("MCP_AUTH_TOKEN", "")
@@ -74,6 +76,50 @@ def validate_chinese_writing_correction(
         return {"status": "error", "message": f"result_json is invalid JSON: {exc}"}
 
     errors = validate_correction(result, original)
+    return {
+        "status": "success" if not errors else "invalid",
+        "valid": not errors,
+        "errors": errors,
+        "cache_key": result.get("cache_key") if isinstance(result, dict) else None,
+    }
+
+
+@mcp.tool()
+def prepare_multilingual_writing_correction(
+    text: str,
+    language: str,
+    target_level: str = "advanced",
+    register: str = "neutral",
+    context: str = "",
+    known_words_json: str = "[]",
+) -> dict:
+    """Prepare a language-agnostic writing correction request for Gemini."""
+    try:
+        known_words = json.loads(known_words_json or "[]")
+    except json.JSONDecodeError as exc:
+        return {"status": "error", "message": f"known_words_json is invalid JSON: {exc}"}
+    if not isinstance(known_words, list):
+        return {"status": "error", "message": "known_words_json must decode to an array."}
+    try:
+        return make_multilingual_envelope(
+            text, language=language, target_level=target_level,
+            register=register, context=context, known_words=known_words,
+        )
+    except ValueError as exc:
+        return {"status": "error", "message": str(exc)}
+
+
+@mcp.tool()
+def validate_multilingual_writing_correction(
+    original: str,
+    result_json: str,
+) -> dict:
+    """Validate a multilingual writing-correction JSON contract."""
+    try:
+        result = json.loads(result_json)
+    except json.JSONDecodeError as exc:
+        return {"status": "error", "message": f"result_json is invalid JSON: {exc}"}
+    errors = validate_multilingual_result(result, original)
     return {
         "status": "success" if not errors else "invalid",
         "valid": not errors,
