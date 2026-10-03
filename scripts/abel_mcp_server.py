@@ -89,6 +89,12 @@ def evaluate_hsk_content(
             "message": "questions_json must decode to a JSON array.",
         }
 
+    if any(not isinstance(q, dict) for q in questions):
+        return {
+            "status": "error",
+            "message": "Every question in questions_json must be a JSON object.",
+        }
+
     expected_distribution = None
     if expected_distribution_json.strip():
         try:
