@@ -323,3 +323,33 @@ def test_hsk6_part_layout_accepts_exact_full_exam_numbering():
         })
     report = evaluate_exam(qs, expected_total=101)
     assert not any(f["rule_id"] == "HSK6_PART_LAYOUT" for f in report["findings"])
+
+
+def test_bracketed_option_labels_are_normalized():
+    qs = [
+        {
+            "number": 1,
+            "part": "listening",
+            "stem": "x",
+            "options": ["【A】甲", "[B]乙", "C、丙", "D:丁"],
+            "answer": "A",
+        },
+    ]
+    report = evaluate_exam(qs)
+    assert report["status"] == "PASS"
+
+
+def test_question_number_fraction_is_rejected():
+    report = evaluate_exam([
+        {"number": 1.5, "part": "listening", "stem": "x", "options": ["A", "B", "C", "D"], "answer": "A"},
+    ])
+    assert report["status"] == "FAIL"
+    assert any(f["rule_id"] == "STRUCT_MALFORMED" for f in report["findings"])
+
+
+def test_question_number_boolean_is_rejected():
+    report = evaluate_exam([
+        {"number": True, "part": "listening", "stem": "x", "options": ["A", "B", "C", "D"], "answer": "A"},
+    ])
+    assert report["status"] == "FAIL"
+    assert any(f["rule_id"] == "STRUCT_MALFORMED" for f in report["findings"])
