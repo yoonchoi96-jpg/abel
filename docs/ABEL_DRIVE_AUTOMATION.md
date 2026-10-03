@@ -4,7 +4,7 @@
 GitHub Actions builds `data/learning_snapshots/*.json`. The optional publisher sends one language snapshot payload to a Google Apps Script bridge.
 
 ## 2. Drive bridge
-`scripts/drive_bridge/Code.gs` is the reference Apps Script endpoint. Configure Script Properties:
+The reference Apps Script endpoint should be deployed outside GitHub (Google Apps Script or an equivalent Drive bridge). Configure the bridge with:
 - `ABEL_LEARNING_ROOT_FOLDER_ID` = the existing Abel Learning folder ID
 - `ABEL_DRIVE_BRIDGE_TOKEN` = a long random token
 
