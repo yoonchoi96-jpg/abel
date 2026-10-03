@@ -54,10 +54,15 @@ async def main(url: str, call_tool: bool = False):
                 )
             print("PASS: evaluate_hsk_content executed and preserved deterministic QA status.")
 
+            deterministic_payload = {
+                key: value
+                for key, value in qa_payload.items()
+                if key not in {"semantic_review_prompt", "tool_status"}
+            }
             gate_result = await session.call_tool(
                 "finalize_hsk_review",
                 {
-                    "deterministic_report_json": '{"status":"PASS","score":100}',
+                    "deterministic_report_json": json.dumps(deterministic_payload, ensure_ascii=False),
                 },
             )
             if getattr(gate_result, "is_error", False):
