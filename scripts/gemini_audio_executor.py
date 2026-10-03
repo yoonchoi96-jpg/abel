@@ -71,11 +71,17 @@ B. Sentence rhythm
   expressed as two natural spoken units.
 - Use punctuation to reflect real phrasing and breath groups.
 - Prefer normal Chinese punctuation: ， 。 ？ ！
+- Treat punctuation as semantic phrasing, not decoration: a comma should usually
+  correspond to a meaningful information boundary, while a full stop should often
+  close a complete thought rather than merely end a long written sentence.
 - Do not use [pause], (pause), stage directions, SSML tags, or other
   meta-instructions in the script.
 - Do not use repeated ellipses …… as a mechanical pause device.
 - Do not insert commas everywhere. Punctuation must reflect meaning and
   natural phrasing.
+- Avoid creating a sequence of sentences that all end with the same neutral
+  declarative cadence. Vary statement, explanation, contrast, question, response,
+  and short follow-up structures when the genre permits.
 
 C. Spoken discourse
 - In dialogues, use a small amount of authentic discourse marking when
@@ -120,8 +126,15 @@ head as if you were a native Mandarin speaker preparing to record it.
 
 - Prefer natural information chunks rather than perfectly balanced written sentences.
 - Let sentence boundaries occur where a speaker would naturally complete a thought.
-- Use occasional short standalone sentences to reset rhythm.
+- Use occasional short standalone sentences to reset rhythm, especially after a dense
+  sentence carrying several facts.
 - Mix sentence openings and avoid repeated "主语 + 谓语 + 宾语" patterns.
+- Use authentic Mandarin information structure when appropriate: topic-comment,
+  time/place framing, contrast-before-conclusion, cause-before-result, and short
+  afterthoughts can sound more natural than repeatedly starting with a named subject.
+- Do not force every sentence into the same "setup → comma → conclusion" shape.
+- When a key fact is followed by a consequence or interpretation, consider a short
+  follow-up sentence rather than attaching everything to one long clause.
 - In dialogue, allow concise replies, confirmations, and natural follow-ups instead
   of making every turn equally polished.
 - In explanatory speech, connect ideas with natural transitions rather than stacking
@@ -303,6 +316,13 @@ NATURAL-CADENCE QA:
 - When one written sentence contains multiple independent thoughts, split it into two
   spoken sentences when that improves comprehension and rhythm without changing meaning.
 - Conversely, do not fragment sentences merely to create artificial "human" pauses.
+- Keep dense noun phrases and modifier chains intact when they carry HSK6 meaning;
+  do not simplify advanced syntax just to shorten the audio.
+- For long sentences, make the information hierarchy obvious: context first, then the
+  central claim or event, then supporting detail or consequence. Do not give every clause
+  equal prosodic weight.
+- In dialogue, let the second speaker react to the semantic focus of the first speaker;
+  avoid producing two consecutive turns with the same grammatical rhythm.
 - Prefer meaningful information chunks: setup -> development -> key detail -> consequence
   or conclusion, when appropriate to the genre.
 - Allow occasional short standalone sentences to reset the listener after a dense sentence.
