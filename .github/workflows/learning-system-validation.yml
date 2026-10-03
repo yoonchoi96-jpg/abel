@@ -28,3 +28,5 @@ jobs:
           python scripts/learning_drive_publisher_test.py
           python scripts/resource_catalog_test.py
           python scripts/learning_practice_test.py
+          python scripts/error_review_engine_test.py
+          python scripts/adaptive_learning_plan_test.py
