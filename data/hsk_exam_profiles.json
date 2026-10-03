@@ -1,0 +1,57 @@
+{
+  "schema_version": "abel.hsk.exam-profiles.v1",
+  "source": "Chinese Test Service official HSK 3.0 test structure pages",
+  "profiles": {
+    "HSK3.0-5": {
+      "exam_system": "HSK3.0",
+      "level": "HSK5",
+      "delivery": ["paper", "internet"],
+      "sections": [
+        {"kind":"listening","items":45,"duration_minutes":30,"score_max":100},
+        {"kind":"reading","items":45,"duration_minutes":45,"score_max":100},
+        {"kind":"writing","items":10,"duration_minutes":40,"score_max":100}
+      ],
+      "total_items": 100,
+      "test_duration_minutes": 120,
+      "reported_scores": ["listening","reading","writing","total"],
+      "total_score_max": 300,
+      "passing_score": null,
+      "scoring_model": "section_scores_plus_total; official score report"
+    },
+    "HSK3.0-6": {
+      "exam_system": "HSK3.0",
+      "level": "HSK6",
+      "delivery": ["paper", "internet"],
+      "sections": [
+        {"kind":"listening","items":50,"duration_minutes":35,"score_max":100},
+        {"kind":"reading","items":50,"duration_minutes":50,"score_max":100},
+        {"kind":"writing","items":1,"duration_minutes":45,"score_max":100}
+      ],
+      "total_items": 101,
+      "test_duration_minutes": 135,
+      "reported_scores": ["listening","reading","writing","total"],
+      "total_score_max": 300,
+      "passing_score": null,
+      "scoring_model": "section_scores_plus_total; official score report"
+    },
+    "HSK3.0-7-9": {
+      "exam_system": "HSK3.0",
+      "level": "HSK7-9",
+      "delivery": ["internet"],
+      "sections": [
+        {"kind":"listening","items":40,"objective_items":34,"subjective_items":6,"duration_minutes":30,"score_max":100},
+        {"kind":"reading","items":47,"objective_items":33,"subjective_items":14,"duration_minutes":60,"score_max":100},
+        {"kind":"writing","items":2,"duration_minutes":55,"score_max":100},
+        {"kind":"translation","items":4,"duration_minutes":41,"score_max":100},
+        {"kind":"speaking","items":5,"duration_minutes":24,"score_max":100}
+      ],
+      "total_items": 98,
+      "objective_items": 67,
+      "subjective_items": 31,
+      "test_duration_minutes": 210,
+      "reported_scores": ["listening","reading","writing","translation","speaking"],
+      "level_evaluation": ["below HSK7","HSK7","HSK8","HSK9"],
+      "scoring_model": "IRT_ability_to_0_100_report_score"
+    }
+  }
+}
