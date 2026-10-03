@@ -1,4 +1,4 @@
-# Abel HSK Evaluation Engine v1.0
+# Abel HSK Evaluation Engine v1.1
 
 Abel's HSK QA is deliberately split into two layers.
 
@@ -33,7 +33,7 @@ The same module builds a Gemini-ready adversarial review prompt covering recurri
 - one-token/one-blank triviality
 - regression after a revision
 
-The deterministic report tells the reviewer what can be measured, while the LLM layer decides what requires linguistic or semantic judgment.
+The deterministic report tells the reviewer what can be measured, while the LLM layer decides what requires linguistic or semantic judgment. The semantic reviewer must return exactly one question review for every supplied question number; unresolved factual verification also prevents release.
 
 ## MCP
 
@@ -80,3 +80,22 @@ This keeps the Python service from pretending it can judge Mandarin semantics wh
 - `finalize_hsk_review`
 
 It also executes the two QA tools with a minimal fixture after MCP initialization.
+
+
+## Gate contract hardening
+
+The evaluate_hsk_content tool keeps the deterministic QA status (PASS, REVIEW, or FAIL) in status and uses tool_status="success" only for transport/tool success. This prevents a successful MCP invocation from masking a failed QA report.
+
+The finalize_hsk_review tool now blocks release when:
+- deterministic status is anything other than PASS
+- semantic pass is not a real boolean
+- the semantic review has malformed arrays or question-review entries
+- question-review coverage does not exactly match the deterministic question numbers
+- any question review is revise or reject
+- unresolved factual verification items remain
+
+The release gate is therefore a composition of deterministic QA plus complete semantic review, rather than a best-effort JSON merge.
+
+## CI parity
+
+The validation workflow installs both the general project dependencies and the production MCP dependency set from requirements-mcp.txt, then imports the production MCP server and checks that the three required tool functions register before running the full test suite.
