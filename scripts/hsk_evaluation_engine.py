@@ -87,7 +87,8 @@ def evaluate_exam(
     extreme_wrong: list[int] = []
     extreme_right: list[int] = []
     malformed: list[int] = []
-    duplicate_stems: dict[str, list[int]] = {}\n    duplicate_options: dict[str, list[int]] = {}
+    duplicate_stems: dict[str, list[int]] = {}
+    duplicate_options: dict[int, list[str]] = {}
     option_shape_leaks: list[int] = []
     one_option_trivial: list[int] = []
 
@@ -102,12 +103,16 @@ def evaluate_exam(
         answers.append((n, answer))
         texts = [_option_text(x) for x in options[:4]]
 
-        if len({_normalized(x) for x in texts}) < 4:
-            duplicate_stems.setdefault(f"options:{'|'.join(sorted(_normalized(x) for x in texts))}", []).append(n)
+        normalized_options = [_normalized(x) for x in texts]
+        duplicate_option_values = [
+            value for value, count in Counter(normalized_options).items() if count > 1
+        ]
+        if duplicate_option_values:
+            duplicate_options[n] = duplicate_option_values
 
         stem_key = _normalized(q.get("stem", ""))
         if stem_key:
-            duplicate_stems.setdefault(f"stem:{stem_key}", []).append(n)
+            duplicate_stems.setdefault(stem_key, []).append(n)
 
         lengths = [_chinese_len(x) for x in texts]
         max_len = max(lengths)
@@ -207,11 +212,12 @@ def evaluate_exam(
             "At least one option is dramatically different in length; inspect for test-taking clues.",
             one_option_trivial))
 
-    duplicate_groups = [nums for key, nums in duplicate_stems.items() if len(nums) > 1]
-    if duplicate_groups:
-        nums = [n for group in duplicate_groups for n in group]
+    duplicate_stem_groups = [nums for nums in duplicate_stems.values() if len(nums) > 1]
+    duplicate_option_questions = sorted(duplicate_options)
+    if duplicate_stem_groups or duplicate_option_questions:
+        nums = [n for group in duplicate_stem_groups for n in group] + duplicate_option_questions
         findings.append(_finding("DUPLICATE_CONTENT", "error",
-            "Duplicate stems/options detected.", nums))
+            "Duplicate stems or duplicate options within a single question detected.", nums))
 
     severity_score = {"error": 25, "warning": 8, "info": 0}
     penalty = min(100, sum(severity_score[f.severity] for f in findings))
