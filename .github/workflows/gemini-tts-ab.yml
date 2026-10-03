@@ -22,6 +22,6 @@ jobs:
         run: python scripts/gemini_tts_ab.py
       - uses: actions/upload-artifact@v4
         with:
-          name: gemini-tts-hsk6-ab
-          path: gemini_tts_hsk6_ab.wav
+          name: gemini-tts-hsk6-ab-v2
+          path: gemini_tts_hsk6_ab_v2.wav
           retention-days: 7
