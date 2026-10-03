@@ -64,6 +64,22 @@ def _option_text(option: Any) -> str:
     return text
 
 
+def _question_number(value: Any) -> int | None:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _string_list(value: Any) -> bool:
+    return isinstance(value, list) and all(isinstance(item, str) for item in value)
+
+
 def _chinese_len(text: str) -> int:
     return len(re.findall(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]", text or ""))
 
@@ -94,14 +110,31 @@ def evaluate_exam(
     malformed: list[int] = []
     duplicate_stems: dict[str, list[int]] = {}
     duplicate_options: dict[int, list[str]] = {}
+    duplicate_numbers: list[int] = []
+    invalid_parts: list[int] = []
+    option_count_errors: list[int] = []
     option_shape_leaks: list[int] = []
     one_option_trivial: list[int] = []
+    question_numbers: list[int] = []
 
     for q in questions:
-        n = int(q.get("number", 0) or 0)
+        n = _question_number(q.get("number"))
+        if n is None:
+            malformed.append(0)
+            continue
+        question_numbers.append(n)
+
+        part = q.get("part")
+        if part not in PART_LIMITS:
+            invalid_parts.append(n)
+
         answer = _answer_letter(q.get("answer"))
-        options = q.get("options") or []
-        if not n or answer not in "ABCD" or len(options) < 4:
+        options = q.get("options")
+        if not isinstance(options, list) or len(options) != 4:
+            option_count_errors.append(n)
+            malformed.append(n)
+            continue
+        if answer not in "ABCD":
             malformed.append(n)
             continue
 
@@ -145,7 +178,30 @@ def evaluate_exam(
 
     if malformed:
         findings.append(_finding("STRUCT_MALFORMED", "error",
-                                 "Questions must contain number, answer A-D, and four options.", malformed))
+                                 "Questions must contain a positive integer number, an A-D answer, and exactly four options.",
+                                 malformed))
+
+    number_counts = Counter(question_numbers)
+    duplicate_numbers = sorted(n for n, count in number_counts.items() if count > 1)
+    if duplicate_numbers:
+        findings.append(_finding(
+            "DUPLICATE_QUESTION_NUMBER", "error",
+            "Question numbers must be unique.", duplicate_numbers,
+        ))
+
+    if invalid_parts:
+        findings.append(_finding(
+            "PART_INVALID", "error",
+            "Every question must declare a valid part: listening, reading, or writing.",
+            invalid_parts,
+        ))
+
+    if option_count_errors:
+        findings.append(_finding(
+            "OPTION_COUNT", "error",
+            "Each question must contain exactly four options.",
+            option_count_errors,
+        ))
 
     dist = Counter(a for _, a in answers)
     if expected_answer_distribution is not None and dict(dist) != dict(expected_answer_distribution):
@@ -170,6 +226,7 @@ def evaluate_exam(
                     f"{part} question numbers fall outside {lo}-{hi}.", nums))
 
     if answers:
+        answers = sorted(answers, key=lambda item: item[0])
         run = 1
         max_run = 1
         run_nums = []
@@ -235,6 +292,7 @@ def evaluate_exam(
         "score": max(0, 100 - penalty),
         "metrics": {
             "question_count": len(questions),
+            "question_numbers": sorted(question_numbers),
             "answer_distribution": dict(sorted(dist.items())),
             "max_answer_run": max_run if answers else 0,
             "correct_is_longest_ratio": round(len(longest_answer_hits) / max(1, len(answers)), 3),
@@ -263,22 +321,33 @@ def finalize_review(
     Abel does not invent semantic judgments. It only validates the review contract
     and converts the two QA layers into one machine-readable release gate.
     """
+    deterministic_status = deterministic_report.get("status")
+    deterministic_score = deterministic_report.get("score")
     result = {
-        "gate": "FAIL" if deterministic_report.get("status") == "FAIL" else "PASS",
-        "deterministic_status": deterministic_report.get("status", "UNKNOWN"),
+        "gate": "REVIEW",
+        "deterministic_status": deterministic_status or "UNKNOWN",
         "semantic_status": "NOT_RUN",
-        "score": deterministic_report.get("score", 0),
+        "score": deterministic_score if _is_number(deterministic_score) else 0,
         "release_ready": False,
         "critical_issues": [],
         "global_issues": [],
     }
 
-    if result["gate"] == "FAIL":
+    if deterministic_status == "FAIL":
+        result["gate"] = "FAIL"
+        return result
+
+    if deterministic_status != "PASS":
+        result["gate"] = "REVIEW"
+        return result
+
+    if not _is_number(deterministic_score) or not 0 <= deterministic_score <= 100:
+        result["gate"] = "FAIL"
+        result["semantic_status"] = "NOT_RUN"
+        result["critical_issues"] = ["deterministic_report.score must be a number from 0 to 100."]
         return result
 
     if semantic_review is None:
-        result["gate"] = "REVIEW"
-        result["semantic_status"] = "NOT_RUN"
         return result
 
     if not isinstance(semantic_review, dict):
@@ -287,7 +356,14 @@ def finalize_review(
         result["critical_issues"] = ["semantic_review must be a JSON object."]
         return result
 
-    required = ("pass", "score", "critical_issues", "question_reviews", "global_issues")
+    required = (
+        "pass",
+        "score",
+        "critical_issues",
+        "question_reviews",
+        "global_issues",
+        "factual_verification_needed",
+    )
     missing = [key for key in required if key not in semantic_review]
     if missing:
         result["gate"] = "FAIL"
@@ -295,27 +371,135 @@ def finalize_review(
         result["critical_issues"] = [f"Missing semantic-review fields: {', '.join(missing)}"]
         return result
 
-    semantic_pass = bool(semantic_review.get("pass"))
+    semantic_pass = semantic_review.get("pass")
     semantic_score = semantic_review.get("score")
-    if not isinstance(semantic_score, (int, float)) or not 0 <= semantic_score <= 100:
+    critical_issues = semantic_review.get("critical_issues")
+    question_reviews = semantic_review.get("question_reviews")
+    global_issues = semantic_review.get("global_issues")
+    factual_verification_needed = semantic_review.get("factual_verification_needed")
+
+    if not isinstance(semantic_pass, bool):
+        result["gate"] = "FAIL"
+        result["semantic_status"] = "INVALID"
+        result["critical_issues"] = ["semantic_review.pass must be a boolean."]
+        return result
+
+    if not _is_number(semantic_score) or not 0 <= semantic_score <= 100:
         result["gate"] = "FAIL"
         result["semantic_status"] = "INVALID"
         result["critical_issues"] = ["semantic_review.score must be a number from 0 to 100."]
         return result
 
-    result["semantic_status"] = "PASS" if semantic_pass else "REVISE"
-    result["score"] = min(float(deterministic_report.get("score", 0)), float(semantic_score))
-    result["critical_issues"] = list(semantic_review.get("critical_issues") or [])
-    result["global_issues"] = list(semantic_review.get("global_issues") or [])
+    if not _string_list(critical_issues):
+        result["gate"] = "FAIL"
+        result["semantic_status"] = "INVALID"
+        result["critical_issues"] = ["semantic_review.critical_issues must be an array of strings."]
+        return result
 
-    if not semantic_pass or result["critical_issues"]:
+    if not isinstance(question_reviews, list):
+        result["gate"] = "FAIL"
+        result["semantic_status"] = "INVALID"
+        result["critical_issues"] = ["semantic_review.question_reviews must be an array."]
+        return result
+
+    expected_numbers = set(
+        deterministic_report.get("metrics", {}).get("question_numbers", [])
+        if isinstance(deterministic_report.get("metrics"), dict)
+        else []
+    )
+    review_numbers: list[int] = []
+    invalid_question_reviews: list[int] = []
+    non_pass_reviews: list[int] = []
+
+    for review in question_reviews:
+        if not isinstance(review, dict):
+            result["gate"] = "FAIL"
+            result["semantic_status"] = "INVALID"
+            result["critical_issues"] = ["Every question_reviews entry must be an object."]
+            return result
+
+        number = review.get("number")
+        if not isinstance(number, int) or isinstance(number, bool) or number <= 0:
+            invalid_question_reviews.append(0)
+            continue
+
+        review_numbers.append(number)
+        status = review.get("status")
+        if status not in {"pass", "revise", "reject"}:
+            result["gate"] = "FAIL"
+            result["semantic_status"] = "INVALID"
+            result["critical_issues"] = [f"Invalid question review status for question {number}."]
+            return result
+        if status != "pass":
+            non_pass_reviews.append(number)
+
+        issues = review.get("issues", [])
+        if not _string_list(issues):
+            result["gate"] = "FAIL"
+            result["semantic_status"] = "INVALID"
+            result["critical_issues"] = [f"Question {number} issues must be an array of strings."]
+            return result
+
+    review_counts = Counter(review_numbers)
+    duplicate_review_numbers = sorted(n for n, count in review_counts.items() if count > 1)
+    if invalid_question_reviews:
+        result["gate"] = "FAIL"
+        result["semantic_status"] = "INVALID"
+        result["critical_issues"] = ["Each question review needs a positive integer number."]
+        return result
+
+    if duplicate_review_numbers:
+        result["gate"] = "FAIL"
+        result["semantic_status"] = "INVALID"
+        result["critical_issues"] = [
+            "Duplicate question_reviews entries: " + ", ".join(map(str, duplicate_review_numbers))
+        ]
+        return result
+
+    if expected_numbers and set(review_numbers) != expected_numbers:
+        missing_numbers = sorted(expected_numbers - set(review_numbers))
+        extra_numbers = sorted(set(review_numbers) - expected_numbers)
+        result["gate"] = "FAIL"
+        result["semantic_status"] = "INVALID"
+        detail = []
+        if missing_numbers:
+            detail.append("missing " + ", ".join(map(str, missing_numbers)))
+        if extra_numbers:
+            detail.append("unknown " + ", ".join(map(str, extra_numbers)))
+        result["critical_issues"] = ["Question-review coverage mismatch: " + "; ".join(detail)]
+        return result
+
+    if not _string_list(global_issues):
+        result["gate"] = "FAIL"
+        result["semantic_status"] = "INVALID"
+        result["critical_issues"] = ["semantic_review.global_issues must be an array of strings."]
+        return result
+
+    if not _string_list(factual_verification_needed):
+        result["gate"] = "FAIL"
+        result["semantic_status"] = "INVALID"
+        result["critical_issues"] = [
+            "semantic_review.factual_verification_needed must be an array of strings."
+        ]
+        return result
+
+    result["semantic_status"] = "PASS" if semantic_pass else "REVISE"
+    result["score"] = min(float(deterministic_score), float(semantic_score))
+    result["critical_issues"] = critical_issues
+    result["global_issues"] = global_issues
+
+    if (
+        not semantic_pass
+        or critical_issues
+        or non_pass_reviews
+        or factual_verification_needed
+    ):
         result["gate"] = "REVIEW"
     else:
         result["gate"] = "PASS"
 
     result["release_ready"] = result["gate"] == "PASS"
     return result
-
 
 def build_llm_review_prompt(
     questions: list[dict[str, Any]],
