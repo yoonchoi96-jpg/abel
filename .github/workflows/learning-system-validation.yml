@@ -1,0 +1,28 @@
+name: Learning System Validation
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "scripts/**"
+      - "data/**"
+      - ".github/workflows/**"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile Abel scripts
+        run: python -m compileall -q scripts
+      - name: Run learning system tests
+        run: |
+          python scripts/learning_session_test.py
+          python scripts/question_bank_index_test.py
+          python scripts/learning_drive_publisher_test.py
