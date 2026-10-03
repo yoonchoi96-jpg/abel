@@ -2,8 +2,6 @@ name: Temporary HSK6 Speech QA E2E
 
 on:
   push:
-    paths:
-      - ".github/workflows/temporary-hsk6-speech-qa.yml"
 
 jobs:
   e2e:
