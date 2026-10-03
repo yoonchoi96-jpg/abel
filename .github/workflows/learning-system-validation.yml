@@ -26,3 +26,5 @@ jobs:
           python scripts/learning_session_test.py
           python scripts/question_bank_index_test.py
           python scripts/learning_drive_publisher_test.py
+          python scripts/resource_catalog_test.py
+          python scripts/learning_practice_test.py
