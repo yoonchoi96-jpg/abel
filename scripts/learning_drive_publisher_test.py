@@ -3,7 +3,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from learning_drive_publisher import build_payload
+from scripts.learning_drive_publisher import build_payload
 
 
 def test_build_payload():
