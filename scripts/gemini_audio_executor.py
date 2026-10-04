@@ -1,38 +1,30 @@
 #!/usr/bin/env python3
-"""Abel Gemini -> Apps Script audio executor.
+"""Abel GitHub Gemini TTS -> Google Drive audio executor.
 
 Gemini decides when to call generate_lesson_audio.
-This script executes that function locally and forwards the lesson
-to the Abel Google Apps Script TTS endpoint.
+This script executes that function locally, renders Gemini TTS, and publishes the MP3 directly to Google Drive.
 
 Required environment variables:
   GEMINI_API_KEY
 Optional:
   GEMINI_MODEL (default: gemini-3.8-flash)
-  ABEL_APPS_SCRIPT_URL (overrides the default Apps Script deployment URL)
 """
 
 from __future__ import annotations
 
 import argparse
-import base64
 import json
 import os
 import sys
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-import requests
 from google import genai
 
 from audio_style_profiles import __doc__ as AUDIO_STYLE_PROFILES
 from gemini_tts_renderer import render_gemini_tts
+from drive_audio_uploader import DrivePublisher
 
-
-APPS_SCRIPT_URL = os.getenv(
-    "ABEL_APPS_SCRIPT_URL",
-    "https://script.google.com/macros/s/AKfycby2uN5ArGnOML3fHpEcP5X4wmMv8lsVgg1kuu8ZmRKwkUYvGxtj2tIDyf2FtyAgDdkA/exec",
-)
 
 MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 KST = ZoneInfo("Asia/Seoul")
@@ -293,8 +285,8 @@ Before generating audio, silently inspect the whole script for these measurable 
 If any pattern appears, revise the structure rather than merely changing words.
 
 The audio pipeline creates the MP3 with Gemini TTS and saves it in
-the Abel Google Drive AUDIO folder. Google Cloud TTS is legacy-only and must
-not be used unless TTS_BACKEND=google_cloud is explicitly selected.
+the Abel Google Drive AUDIO folder through the Drive API. Google Cloud TTS is not part
+of this production pipeline.
 """
 
 
@@ -352,63 +344,6 @@ GENERATE_LESSON_AUDIO = {
 def now_kst() -> tuple[str, str]:
     now = datetime.now(KST)
     return now.strftime("%Y-%m-%d"), now.strftime("%H%M")
-
-
-def call_apps_script(arguments: dict) -> dict:
-    text = (arguments.get("text") or "").strip()
-    if not text:
-        return {"status": "error", "message": "Missing lesson text."}
-
-    current_date, current_time = now_kst()
-
-    # Date/time are only accepted when explicitly supplied by the user
-    # through Gemini. Otherwise always use the current Korean time.
-    payload = {
-        "action": "generate-lesson-audio",
-        "text": text,
-        "date": arguments.get("date") or current_date,
-        "time": arguments.get("time") or current_time,
-        "title": arguments.get("title", ""),
-        "level": arguments.get("level", ""),
-        "topic": arguments.get("topic", ""),
-    }
-
-    try:
-        # Apps Script ContentService returns 302 for the POST response.
-        # Do not replay POST against the redirect target: it only accepts GET.
-        first = requests.post(
-            APPS_SCRIPT_URL,
-            json=payload,
-            headers={"Content-Type": "application/json"},
-            allow_redirects=False,
-            timeout=120,
-        )
-
-        location = first.headers.get("Location")
-        if first.status_code in (301, 302, 303, 307, 308) and location:
-            response = requests.get(location, timeout=120)
-        else:
-            response = first
-
-        if response.status_code != 200:
-            return {
-                "status": "error",
-                "http_status": response.status_code,
-                "message": response.text[:3000],
-            }
-
-        try:
-            return response.json()
-        except ValueError:
-            return {
-                "status": "error",
-                "message": "Apps Script returned non-JSON data.",
-                "raw_response": response.text[:3000],
-            }
-
-    except requests.RequestException as exc:
-        return {"status": "error", "message": f"HTTP request failed: {exc}"}
-
 
 
 SPEECH_QA_PROMPT = """
@@ -512,61 +447,6 @@ If score is below 88, set pass=false.
 If there is no meaningful problem, preserve the original script exactly.
 """
 
-def save_gemini_audio_to_apps_script(arguments: dict, mp3_path: str) -> dict:
-    """Upload a Gemini-generated MP3 to Apps Script for Drive storage."""
-    text = (arguments.get("text") or "").strip()
-    if not text:
-        return {"status": "error", "message": "Missing lesson text."}
-
-    current_date, current_time = now_kst()
-    with open(mp3_path, "rb") as audio_file:
-        audio_b64 = base64.b64encode(audio_file.read()).decode("ascii")
-    payload = {
-        "action": "save-gemini-lesson-audio",
-        "audioBase64": audio_b64,
-        "mimeType": "audio/mpeg",
-        "fileName": "",
-        "date": arguments.get("date") or current_date,
-        "time": arguments.get("time") or current_time,
-        "title": arguments.get("title", ""),
-        "level": arguments.get("level", ""),
-        "topic": arguments.get("topic", ""),
-        "text": text,
-    }
-
-    try:
-        first = requests.post(
-            APPS_SCRIPT_URL,
-            json=payload,
-            headers={"Content-Type": "application/json"},
-            allow_redirects=False,
-            timeout=120,
-        )
-        location = first.headers.get("Location")
-        if first.status_code in (301, 302, 303, 307, 308) and location:
-            response = requests.get(location, timeout=120)
-        else:
-            response = first
-
-        if response.status_code != 200:
-            return {
-                "status": "error",
-                "http_status": response.status_code,
-                "message": response.text[:3000],
-            }
-
-        try:
-            return response.json()
-        except ValueError:
-            return {
-                "status": "error",
-                "message": "Apps Script returned non-JSON data.",
-                "raw_response": response.text[:3000],
-            }
-    except requests.RequestException as exc:
-        return {"status": "error", "message": f"HTTP request failed: {exc}"}
-
-
 def generate_and_save_gemini_audio(arguments: dict) -> dict:
     current_date, current_time = now_kst()
     date = arguments.get("date") or current_date
@@ -574,14 +454,22 @@ def generate_and_save_gemini_audio(arguments: dict) -> dict:
     output_dir = os.getenv("ABEL_TTS_TMP_DIR", "tmp")
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, f"lesson_{date}_{time}.mp3")
-
     render_gemini_tts(
         arguments.get("text", ""),
         output_path,
         voice=os.getenv("GEMINI_TTS_VOICE", "Kore"),
         model=os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-tts"),
     )
-    result = save_gemini_audio_to_apps_script(arguments, output_path)
+    publisher = DrivePublisher(os.getenv("ABEL_DRIVE_FOLDER_ID", ""))
+    result = publisher.publish_lesson(
+        output_path,
+        date=date,
+        time=time,
+        title=arguments.get("title", ""),
+        level=arguments.get("level", ""),
+        topic=arguments.get("topic", ""),
+        text=arguments.get("text", ""),
+    )
     try:
         os.remove(output_path)
     except OSError:
@@ -711,11 +599,6 @@ def execute_function(name: str, arguments: dict, client=None) -> dict:
                 "revised_text": arguments.get("text", ""),
             }
 
-    backend = os.getenv("TTS_BACKEND", "gemini").strip().lower()
-    if backend == "google_cloud":
-        return call_apps_script(arguments)
-    if backend != "gemini":
-        return {"status": "error", "message": f"Unknown TTS_BACKEND: {backend}. Use gemini or google_cloud."}
     return generate_and_save_gemini_audio(arguments)
 
 
@@ -778,10 +661,23 @@ def run(prompt: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Abel Gemini audio executor")
+    parser = argparse.ArgumentParser(description="Abel GitHub Gemini TTS -> Google Drive executor")
     parser.add_argument("prompt", nargs="+", help="User request for Gemini")
+    parser.add_argument("--title", default="", help="Optional lesson title")
+    parser.add_argument("--level", default="HSK6", help="Lesson level")
+    parser.add_argument("--topic", default="", help="Optional lesson topic")
     args = parser.parse_args()
-    run(" ".join(args.prompt))
+    prompt = " ".join(args.prompt)
+    context = []
+    if args.title:
+        context.append(f"TITLE: {args.title}")
+    if args.level:
+        context.append(f"LEVEL: {args.level}")
+    if args.topic:
+        context.append(f"TOPIC: {args.topic}")
+    if context:
+        prompt += "\n\n" + "\n".join(context)
+    run(prompt)
 
 
 if __name__ == "__main__":
