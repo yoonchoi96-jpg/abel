@@ -284,9 +284,8 @@ Before generating audio, silently inspect the whole script for these measurable 
 - A formal passage contaminated by unnecessary casual fillers.
 If any pattern appears, revise the structure rather than merely changing words.
 
-The audio pipeline creates the MP3 with Gemini TTS and saves it in
-the Abel Google Drive AUDIO folder through the Drive API. Google Cloud TTS is not part
-of this production pipeline.
+The audio pipeline routes the request through Gemini TTS and saves the MP3
+in the Abel Google Drive AUDIO folder through the Drive API.
 """
 
 
@@ -294,8 +293,8 @@ GENERATE_LESSON_AUDIO = {
     "type": "function",
     "name": "generate_lesson_audio",
     "description": (
-        "Generate a Chinese listening lesson MP3 through the Abel "
-        "Google Cloud TTS backend and save it to Google Drive."
+        "Generate a routed Chinese listening lesson MP3 through the Abel "
+        "Gemini TTS backend and save it to Google Drive."
     ),
     "parameters": {
         "type": "object",
@@ -334,6 +333,30 @@ GENERATE_LESSON_AUDIO = {
             "topic": {
                 "type": "string",
                 "description": "Lesson topic.",
+            },
+            "language": {
+                "type": "string",
+                "enum": ["zh-CN"],
+                "description": "Active learning language. Current production route: zh-CN.",
+            },
+            "delivery_mode": {
+                "type": "string",
+                "enum": [
+                    "conversational_dialogue",
+                    "interview",
+                    "news_report",
+                    "announcement",
+                    "lecture_explanation",
+                    "narrative_story",
+                    "formal_informational",
+                    "casual_explanation"
+                ],
+                "description": "Audio delivery profile.",
+            },
+            "speaker_mode": {
+                "type": "string",
+                "enum": ["single", "dual"],
+                "description": "Speaker topology. Dual requires the multi-speaker renderer.",
             },
         },
         "required": ["action", "text"],
@@ -457,8 +480,11 @@ def generate_and_save_gemini_audio(arguments: dict) -> dict:
     render_gemini_tts(
         arguments.get("text", ""),
         output_path,
-        voice=os.getenv("GEMINI_TTS_VOICE", "Kore"),
-        model=os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-tts"),
+        voice=None,
+        model=None,
+        language=arguments.get("language", "zh-CN"),
+        delivery_mode=arguments.get("delivery_mode", "casual_explanation"),
+        speaker_mode=arguments.get("speaker_mode", "single"),
     )
     publisher = DrivePublisher(os.getenv("ABEL_DRIVE_FOLDER_ID", ""))
     result = publisher.publish_lesson(
