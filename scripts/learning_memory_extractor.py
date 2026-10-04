@@ -7,6 +7,7 @@ from typing import Any
 
 SCHEMA = "abel.learning.memory.v1"
 MAX_ITEMS = 50
+MIN_RECURRING_COUNT = 2
 
 def _json_value(value: Any) -> Any:
     if isinstance(value, str):
@@ -56,17 +57,18 @@ def extract(events: list[dict[str, Any]], language: str) -> dict[str, Any]:
 
     error_items = [
         {"type": k, "count": n, "memory_id": _fingerprint("error", k)}
-        for k, n in errors.most_common(MAX_ITEMS)
+        for k, n in errors.most_common(MAX_ITEMS) if n >= MIN_RECURRING_COUNT
     ]
     vocab_items = [
         {"word": w, "status": s, "count": n, "memory_id": _fingerprint("vocab", f"{w}|{s}")}
-        for (w, s), n in sorted(vocab.items(), key=lambda x: (-x[1], x[0]))
+        for (w, s), n in sorted(vocab.items(), key=lambda x: (-x[1], x[0])) if n >= MIN_RECURRING_COUNT
     ][:MAX_ITEMS]
     return {
         "schema_version": SCHEMA,
         "language": language,
         "source": "Abel provider event history",
         "event_count": len(events),
+        "memory_policy": {"min_recurrence": MIN_RECURRING_COUNT, "max_items": MAX_ITEMS},
         "recurring_error_signals": error_items,
         "vocabulary_usage_signals": vocab_items,
         "provider_outcomes": dict(outcomes),
