@@ -1,5 +1,6 @@
 from pathlib import Path
-import tempfile
+import sys, tempfile
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from learning_pipeline import run
 
 def main():
@@ -19,5 +20,3 @@ def main():
         assert out["adaptive_plan"]["items"][0]["id"]=="q1"
         assert out["snapshot"]["learning_sessions"]["session_types"][0]["n"]==1
     print("learning_pipeline_test: PASS")
-
-if __name__=="__main__": main()
