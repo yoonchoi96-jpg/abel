@@ -25,9 +25,11 @@ def _now(): return datetime.now(timezone.utc)
 def _iso(dt): return dt.isoformat()
 def _parse(s): return datetime.fromisoformat(s.replace("Z","+00:00"))
 
-def apply_result(language, question_id, resource_id, correct, *, kind=None, level=None, at=None, db_path="data/abel_learning.db"):
+def apply_result(language, question_id, resource_id, correct, *, kind=None, level=None, at=None, db_path="data/abel_learning.db", connection=None):
     if not language or not question_id or not resource_id: raise ValueError("language, question_id, resource_id required")
-    at=_parse(at) if at else _now(); now=_iso(at); con=connect(db_path)
+    at=_parse(at) if at else _now(); now=_iso(at)
+    own_connection = connection is None
+    con = connection if connection is not None else connect(db_path)
     row=con.execute("SELECT * FROM review_states WHERE language=? AND question_id=? AND resource_id=?",(language,question_id,resource_id)).fetchone()
     if row is None:
         interval=1.0 if correct else 0.0
@@ -45,9 +47,12 @@ def apply_result(language, question_id, resource_id, correct, *, kind=None, leve
         status="mastered" if cc>=5 else "active"
         con.execute("""UPDATE review_states SET kind=COALESCE(?,kind),level=COALESCE(?,level),last_seen=?,review_count=review_count+1,correct_count=correct_count+?,wrong_count=wrong_count+?,consecutive_correct=?,consecutive_wrong=?,last_result=?,interval_days=?,next_review_at=?,status=?,updated_at=? WHERE language=? AND question_id=? AND resource_id=?""",
         (kind,level,now,int(correct),int(not correct),cc,cw,"correct" if correct else "wrong",interval,_iso(next_at),status,now,language,question_id,resource_id))
-    con.commit()
+    if own_connection:
+        con.commit()
     out=dict(con.execute("SELECT * FROM review_states WHERE language=? AND question_id=? AND resource_id=?",(language,question_id,resource_id)).fetchone())
-    con.close(); return out
+    if own_connection:
+        con.close()
+    return out
 
 def due_items(language, db_path="data/abel_learning.db", limit=20, now=None):
     if limit<1 or limit>100: raise ValueError("limit must be 1..100")
