@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse, json, sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
+from review_state_engine import apply_result
 
 DB = Path("data/abel_learning.db")
 SCHEMA_VERSION = 3
@@ -45,16 +46,22 @@ def record_session(session: dict, db_path=DB):
     session_id=cur.lastrowid
     payload=session.get("payload",{})
     for row in payload.get("results",[]) if isinstance(payload,dict) else []:
-        if row.get("correct") is True:
-            continue
         qid=str(row.get("question_id","")).strip()
+        resource_id=session.get("resource_id") or row.get("resource_id")
         if not qid:
             continue
-        con.execute("""INSERT INTO practice_errors
-          (session_id,language,question_id,resource_id,kind,level,error_type,occurred_at)
-          VALUES(?,?,?,?,?,?,?,?)""",(
-          session_id,session["language"],qid,session.get("resource_id"),
-          session.get("session_type"),session.get("level"),row.get("error_type"),now))
+        if row.get("correct") is not True:
+            con.execute("""INSERT INTO practice_errors
+              (session_id,language,question_id,resource_id,kind,level,error_type,occurred_at)
+              VALUES(?,?,?,?,?,?,?,?)""",(
+              session_id,session["language"],qid,resource_id,
+              session.get("session_type"),session.get("level"),row.get("error_type"),now))
+        if resource_id:
+            apply_result(
+                session["language"], qid, str(resource_id), row.get("correct") is True,
+                kind=session.get("session_type"), level=session.get("level"),
+                at=now, db_path=db_path,
+            )
     con.commit(); con.close(); return session_id
 
 def record_provider_event(language: str, task_type: str, output: dict, *, model=None, cache_key=None, input_summary="", db_path=DB):
