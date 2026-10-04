@@ -31,7 +31,6 @@ def build_snapshot(language: str, db_path: str | Path) -> dict:
     learning_memory = extract_from_db(language, db_path)
     writing_errors = error_summary(language=language, db_path=db_path)
     practice_errors = sessions.get("practice_errors", [])
-    # Keep writing-history taxonomy intact while exposing practice recurrence.
     recurring = [
         {"issue_type": x["error_type"], "severity": "practice", "count": x["count"],
          "questions": x["questions"]}
@@ -69,8 +68,7 @@ def render_markdown(snapshot: dict) -> str:
         f"First correction: {s.get('first_correction') or '-'}",
         f"Last correction: {s.get('last_correction') or '-'}",
         f"Average descriptive writing score: {round(s['average_score'], 1) if s.get('average_score') is not None else '-'}",
-        "",
-        "## Learning sessions",
+        "", "## Learning sessions",
         f"Session types: {len(snapshot['learning_sessions'].get('session_types', []))}",
         "", "## Recurring errors",
     ]
@@ -106,13 +104,19 @@ def render_markdown(snapshot: dict) -> str:
     if errors:
         lines.append("- Recurring provider error signals:")
         for x in errors[:20]:
-            lines.append(f"  - {x.get('type')}: {x.get('count')}")
+            task_types = ", ".join(x.get("task_types", []))
+            seen = f" / first {x.get('first_seen')} / last {x.get('last_seen')}" if x.get("first_seen") else ""
+            task_suffix = f" / tasks: {task_types}" if task_types else ""
+            lines.append(f"  - {x.get('type')}: {x.get('count')}{task_suffix}{seen}")
     else:
         lines.append("- No recurring provider error signals yet.")
     if vocab:
         lines.append("- Recurring vocabulary-usage signals:")
         for x in vocab[:20]:
-            lines.append(f"  - {x.get('word')} / {x.get('status')}: {x.get('count')}")
+            task_types = ", ".join(x.get("task_types", []))
+            seen = f" / first {x.get('first_seen')} / last {x.get('last_seen')}" if x.get("first_seen") else ""
+            task_suffix = f" / tasks: {task_types}" if task_types else ""
+            lines.append(f"  - {x.get('word')} / {x.get('status')}: {x.get('count')}{task_suffix}{seen}")
     else:
         lines.append("- No recurring vocabulary-usage signals yet.")
     lines += [
