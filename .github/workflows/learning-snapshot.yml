@@ -21,22 +21,15 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Build learning snapshots
+      - name: Validate snapshot builder
         run: |
-          python scripts/learning_snapshot.py --all
-          python -m json.tool data/learning_snapshots/index.json >/dev/null
-          for f in data/learning_snapshots/*.json; do
-            python -m json.tool "$f" >/dev/null
-          done
+          python -m compileall -q scripts
+          python scripts/learning_session_test.py
+          python scripts/learning_drive_publisher_test.py
 
-      - name: Commit snapshots
+      # Personal learning history is not present on an ephemeral GitHub runner.
+      # Never generate and commit an empty snapshot as if it were user history.
+      - name: External history notice
         run: |
-          git config user.name "abel-bot"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/learning_snapshots
-          if git diff --cached --quiet; then
-            echo "No learning snapshot changes."
-            exit 0
-          fi
-          git commit -m "chore: update learning snapshots"
-          git push
+          echo "Abel learning history is external to the GitHub runner."
+          echo "Generate snapshots from the durable/local learning DB and publish them through the Drive bridge."
