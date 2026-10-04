@@ -14,12 +14,14 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
-      - name: Generate casual Gemini TTS sample
+      - name: Generate canonical routed Gemini TTS sample
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_TTS_MODEL: "gemini-3.8-flash-tts"
+          GEMINI_TTS_VOICE: "Kore"
         run: python scripts/gemini_tts_casual.py
       - uses: actions/upload-artifact@v4
         with:
-          name: gemini-tts-hsk6-casual
-          path: gemini_tts_hsk6_casual.wav
+          name: abel-canonical-gemini-tts-hsk6-casual
+          path: gemini_tts_hsk6_casual.mp3
           retention-days: 7
