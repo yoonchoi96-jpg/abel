@@ -311,15 +311,16 @@ def evaluate_hsk_content(
 
     # Production HSK QA target: HSK 3.0 Level 6.
     # Full written mocks use 82 tasks: 1-40 listening, 41-80 reading, 81-82 writing.
-    if expected_total not in (0, 82):
+    if expected_total < 0 or expected_total > 82:
         return {
             "status": "error",
-            "message": "HSK 3.0 Level 6 QA requires expected_total=82 (or omit it). Legacy 101-question HSK 2.0 layout is not supported by this production tool.",
+            "message": "HSK 3.0 Level 6 QA supports expected_total from 1 to 82 (or omit it for the full 82-task mock). Legacy 101-question HSK 2.0 layout is not supported by this production tool.",
         }
 
+    qa_total = 82 if expected_total == 0 else expected_total
     report = evaluate_hsk30_level6(
         questions,
-        expected_total=82,
+        expected_total=qa_total,
         expected_answer_distribution=expected_distribution,
     )
     report["semantic_review_prompt"] = build_hsk30_llm_review_prompt(
