@@ -42,13 +42,16 @@ class DrivePublisher:
         return response
 
     def children(self, parent_id, name, mime_type=None):
+        def quote(value):
+            return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
+
         q = [
             f"'{parent_id}' in parents",
             "trashed = false",
-            f"name = {json.dumps(name)}",
+            f"name = {quote(name)}",
         ]
         if mime_type:
-            q.append(f"mimeType = {json.dumps(mime_type)}")
+            q.append(f"mimeType = {quote(mime_type)}")
         params = {
             "q": " and ".join(q),
             "pageSize": 20,
