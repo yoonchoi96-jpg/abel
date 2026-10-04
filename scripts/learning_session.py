@@ -57,16 +57,22 @@ def record_session(session: dict, db_path=DB):
           session.get("session_type"),session.get("level"),row.get("error_type"),now))
     con.commit(); con.close(); return session_id
 
-def record_provider_event(language: str, task_type: str, output: dict, *, model=None, cache_key=None, input_summary="", db_path=DB):\n    if not language or not task_type:\n        raise ValueError("language and task_type are required")\n    now=datetime.now(timezone.utc).isoformat()\n    con=connect(db_path)\n    cur=con.execute("""INSERT INTO provider_learning_events\n      (language,task_type,model,cache_key,input_summary,output_json,created_at)\n      VALUES(?,?,?,?,?,?,?)""",(language,task_type,model,cache_key,input_summary,\n      json.dumps(output,ensure_ascii=False),now))\n    con.commit(); con.close(); return cur.lastrowid\n\ndef provider_summary(language, db_path=DB):\n    con=connect(db_path)\n    rows=con.execute("""SELECT task_type,COUNT(*) count,MAX(created_at) last_created_at\n      FROM provider_learning_events WHERE language=? GROUP BY task_type ORDER BY count DESC,task_type""",(language,)).fetchall()\n    con.close()\n    return {"schema_version":"abel.learning.provider-summary.v1","language":language,"events":[dict(r) for r in rows]}\n\ndef record_provider_event(language: str, task_type: str, output: dict, *, model=None, cache_key=None, input_summary="", db_path=DB):
-    if not language or not task_type: raise ValueError("language and task_type are required")
+def record_provider_event(language: str, task_type: str, output: dict, *, model=None, cache_key=None, input_summary="", db_path=DB):
+    if not language or not task_type:
+        raise ValueError("language and task_type are required")
     now=datetime.now(timezone.utc).isoformat()
     con=connect(db_path)
-    cur=con.execute("""INSERT INTO provider_learning_events (language,task_type,model,cache_key,input_summary,output_json,created_at) VALUES(?,?,?,?,?,?,?)""",(language,task_type,model,cache_key,input_summary,json.dumps(output,ensure_ascii=False),now))
+    cur=con.execute("""INSERT INTO provider_learning_events
+      (language,task_type,model,cache_key,input_summary,output_json,created_at)
+      VALUES(?,?,?,?,?,?,?)""",(
+      language,task_type,model,cache_key,input_summary,json.dumps(output,ensure_ascii=False),now))
     con.commit(); con.close(); return cur.lastrowid
 
 def provider_summary(language, db_path=DB):
     con=connect(db_path)
-    rows=con.execute("""SELECT task_type,COUNT(*) count,MAX(created_at) last_created_at FROM provider_learning_events WHERE language=? GROUP BY task_type ORDER BY count DESC,task_type""",(language,)).fetchall()
+    rows=con.execute("""SELECT task_type,COUNT(*) count,MAX(created_at) last_created_at
+      FROM provider_learning_events WHERE language=? GROUP BY task_type
+      ORDER BY count DESC,task_type""",(language,)).fetchall()
     con.close()
     return {"schema_version":"abel.learning.provider-summary.v1","language":language,"events":[dict(r) for r in rows]}
 
