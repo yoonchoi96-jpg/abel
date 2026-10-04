@@ -2,8 +2,9 @@
 import json
 import tempfile
 from pathlib import Path
-
-from scripts.learning_drive_publisher import build_payload
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from learning_drive_publisher import build_payload
 
 
 def test_build_payload():
