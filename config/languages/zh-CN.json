@@ -1,0 +1,19 @@
+{
+  "schema_version": "abel.language-config.v1",
+  "language": "zh-CN",
+  "name": "Chinese (Simplified Mandarin)",
+  "status": "active",
+  "source_locale": "zh-CN",
+  "learning_scales": ["HSK3.0"],
+  "content_types": ["vocabulary", "grammar", "expressions", "reading", "listening", "writing", "speaking", "translation", "culture"],
+  "tts": {
+    "model_env": "GEMINI_TTS_MODEL",
+    "voice_env": "GEMINI_TTS_VOICE",
+    "default_model": "gemini-3.8-flash-tts",
+    "default_voice": "Kore"
+  },
+  "storage": {
+    "drive_language_folder": "zh-CN",
+    "audio_language_folder": "zh-CN"
+  }
+}
