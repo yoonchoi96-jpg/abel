@@ -2,6 +2,8 @@
 from learning_memory_extractor import extract
 
 events=[{
+  "task_type":"translation",
+  "created_at":"2026-10-01T01:00:00+00:00",
   "output":{"status":"executed","response":{"status":"success","text":"""{
     "issues":[{"issue_type":"grammar"},{"issue_type":"grammar"},{"issue_type":"word_choice"}],
     "vocabulary_usage":[
@@ -16,8 +18,14 @@ assert r["schema_version"]=="abel.learning.memory.v1"
 assert r["event_count"]==1
 assert r["recurring_error_signals"][0]["type"]=="grammar"
 assert r["recurring_error_signals"][0]["count"]==2
+assert r["recurring_error_signals"][0]["task_types"]=={"translation":2}
+assert r["recurring_error_signals"][0]["first_seen"]=="2026-10-01T01:00:00+00:00"
+assert r["recurring_error_signals"][0]["last_seen"]=="2026-10-01T01:00:00+00:00"
 assert r["vocabulary_usage_signals"][0]["word"]=="维护"
 assert r["vocabulary_usage_signals"][0]["status"]=="incorrect"
 assert r["vocabulary_usage_signals"][0]["count"]==2
+assert r["vocabulary_usage_signals"][0]["task_types"]=={"translation":2}
+assert r["vocabulary_usage_signals"][0]["first_seen"]=="2026-10-01T01:00:00+00:00"
+assert r["vocabulary_usage_signals"][0]["last_seen"]=="2026-10-01T01:00:00+00:00"
 assert r["rules"]["no_invented_history"] is True
 print("ok")
