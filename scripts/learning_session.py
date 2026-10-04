@@ -36,6 +36,7 @@ def record_session(session: dict, db_path=DB):
     missing=[x for x in required if not session.get(x)]
     if missing: raise ValueError("missing: "+",".join(missing))
     now=datetime.now(timezone.utc).isoformat()
+    review_at=session.get("started_at", now)
     # Initialize review-state schema before opening the session transaction.
     review_con=connect_review(db_path)
     review_con.close()
@@ -58,12 +59,12 @@ def record_session(session: dict, db_path=DB):
               (session_id,language,question_id,resource_id,kind,level,error_type,occurred_at)
               VALUES(?,?,?,?,?,?,?,?)""",(
               session_id,session["language"],qid,resource_id,
-              session.get("session_type"),session.get("level"),row.get("error_type"),now))
+              session.get("session_type"),session.get("level"),row.get("error_type"),review_at))
         if resource_id:
             apply_result(
                 session["language"], qid, str(resource_id), row.get("correct") is True,
                 kind=session.get("session_type"), level=session.get("level"),
-                at=now, db_path=db_path, connection=con,
+                at=review_at, db_path=db_path, connection=con,
             )
     con.commit(); con.close(); return session_id
 
