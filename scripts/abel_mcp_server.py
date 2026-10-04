@@ -183,10 +183,10 @@ def generate_lesson_audio(
     level: str = "HSK6",
     topic: str = "",
 ) -> dict:
-    """Generate a Chinese listening lesson MP3 and save it to Abel Google Drive.
+    """Generate a Chinese listening lesson MP3 with Gemini TTS and save it to Abel Google Drive.
 
-    Production default: Gemini TTS -> local MP3 conversion -> Apps Script storage.
-    Legacy Google Cloud TTS remains available only with TTS_BACKEND=google_cloud.
+    Production backend is hard-pinned to Gemini TTS. Legacy Google Cloud TTS is not
+    used by this MCP tool; Apps Script is storage-only for the finished MP3.
     """
 
     text = (text or "").strip()
@@ -198,7 +198,10 @@ def generate_lesson_audio(
             "message": f"Lesson text exceeds the {MAX_LESSON_CHARS}-character limit.",
         }
 
-    backend = os.getenv("TTS_BACKEND", "gemini").strip().lower()
+    # Production safety: this MCP tool is permanently Gemini-backed.
+    # Do not allow a stale Cloud Run environment variable to route audio back to
+    # the legacy Google Cloud TTS endpoint.
+    backend = "gemini"
 
     if backend == "google_cloud":
         payload = {
