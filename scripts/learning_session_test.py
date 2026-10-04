@@ -6,7 +6,7 @@ from pathlib import Path
 with tempfile.TemporaryDirectory() as t:
     db=Path(t)/"x.db"
     record_session({
-        "language":"zh-CN","session_type":"listening","resource_id":"l1",
+        "language":"zh-CN","session_type":"listening","resource_id":"l1","started_at":"2026-10-03T00:00:00+00:00",
         "level":"HSK6","score":80,"total":10,"correct":8,
         "payload":{"results":[
             {"question_id":"q1","correct":False,"error_type":"vocabulary"},
