@@ -13,8 +13,12 @@ def test_sync():
         (src/"index.json").write_text(json.dumps({"languages":["zh-CN"]}), encoding="utf-8")
         (src/"zh-CN.json").write_text(json.dumps({"language":"zh-CN"}), encoding="utf-8")
         (src/"zh-CN.md").write_text("# Chinese\n", encoding="utf-8")
-        result=sync(src,dst)
+        queues=root/"queues"; queues.mkdir()
+        (queues/"zh-CN.json").write_text(json.dumps({"language":"zh-CN","items":[{"question_id":"q1"}]}), encoding="utf-8")
+        result=sync(src,dst,queues)
         assert result["snapshot_count"] == 1
+        assert result["daily_queue_count"] == 1
+        assert (dst/"Chinese"/"DAILY_REVIEW_QUEUE.json").exists()
         assert (dst/"zh-CN.json").exists()
         assert (dst/"zh-CN.md").exists()
         assert json.loads((dst/"_ABEL_SYNC_STATUS.json").read_text())["source"] == "Abel"
