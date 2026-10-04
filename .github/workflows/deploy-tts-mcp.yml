@@ -10,6 +10,7 @@ on:
       - "scripts/gemini_tts_renderer.py"
       - "scripts/audio_style_profiles.py"
       - "scripts/deploy_abel_mcp.sh"
+      - ".github/workflows/deploy-tts-mcp.yml"
   workflow_dispatch: {}
 
 jobs:
