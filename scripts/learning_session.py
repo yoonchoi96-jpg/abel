@@ -36,6 +36,9 @@ def record_session(session: dict, db_path=DB):
     missing=[x for x in required if not session.get(x)]
     if missing: raise ValueError("missing: "+",".join(missing))
     now=datetime.now(timezone.utc).isoformat()
+    # Initialize review-state schema before opening the session transaction.
+    review_con=connect_review(db_path)
+    review_con.close()
     con=connect(db_path)
     cur=con.execute("""INSERT INTO learning_sessions
       (language,session_type,resource_id,level,started_at,duration_seconds,score,total,correct,payload_json,created_at)
