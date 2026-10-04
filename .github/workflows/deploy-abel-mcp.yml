@@ -5,15 +5,10 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "Dockerfile"
-      - "requirements-mcp.txt"
-      - "scripts/abel_mcp_server.py"
-      - "scripts/gemini_tts_renderer.py"
-      - "scripts/drive_audio_uploader.py"
-      - "scripts/deploy_abel_mcp.sh"
-      - "scripts/mcp_smoke_test.py"
-      - ".github/workflows/deploy-abel-mcp.yml"
+
+concurrency:
+  group: abel-mcp-production
+  cancel-in-progress: true
 
 jobs:
   deploy:
