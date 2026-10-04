@@ -6,7 +6,7 @@ from education_task_prompts import build as build_prompt
 
 TASKS=(
     "chinese_writing_correction","translation","chinese_explanation","vocabulary_review",
-    "hsks_exam_qa","adaptive_learning_plan","listening_transcript_analysis","speaking_feedback",
+    "hsks_exam_qa","adaptive_learning_plan","current_facts_research","listening_transcript_analysis","speaking_feedback",
     "listening_practice","reading_practice","writing_practice","mock_test","error_review",
 )
 
