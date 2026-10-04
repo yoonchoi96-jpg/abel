@@ -44,7 +44,8 @@ async def main(url: str, call_tool: bool = False):
                 qa_result = await session.call_tool(
                     "evaluate_hsk_content",
                     {
-                        "questions_json": '[{"number":1,"part":"listening","stem":"测试","options":["A甲","B乙","C丙","D丁"],"answer":"A"}]'
+                        "questions_json": '[{"number":1,"part":"listening","stem":"测试","options":["A甲","B乙","C丙","D丁"],"answer":"A"}]',
+                        "expected_total": 1
                     },
                 )
                 if getattr(qa_result, "is_error", False):
