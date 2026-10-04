@@ -15,6 +15,7 @@ Optional:
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import sys
@@ -25,6 +26,7 @@ import requests
 from google import genai
 
 from audio_style_profiles import __doc__ as AUDIO_STYLE_PROFILES
+from gemini_tts_renderer import render_gemini_tts
 
 
 APPS_SCRIPT_URL = os.getenv(
@@ -290,8 +292,9 @@ Before generating audio, silently inspect the whole script for these measurable 
 - A formal passage contaminated by unnecessary casual fillers.
 If any pattern appears, revise the structure rather than merely changing words.
 
-The audio tool creates an MP3 with Google Cloud TTS and saves it in
-the Abel Google Drive AUDIO folder.
+The audio pipeline creates the MP3 with Gemini TTS and saves it in
+the Abel Google Drive AUDIO folder. Google Cloud TTS is legacy-only and must
+not be used unless TTS_BACKEND=google_cloud is explicitly selected.
 """
 
 
@@ -509,6 +512,83 @@ If score is below 88, set pass=false.
 If there is no meaningful problem, preserve the original script exactly.
 """
 
+def save_gemini_audio_to_apps_script(arguments: dict, mp3_path: str) -> dict:
+    """Upload a Gemini-generated MP3 to Apps Script for Drive storage."""
+    text = (arguments.get("text") or "").strip()
+    if not text:
+        return {"status": "error", "message": "Missing lesson text."}
+
+    current_date, current_time = now_kst()
+    with open(mp3_path, "rb") as audio_file:
+        audio_b64 = base64.b64encode(audio_file.read()).decode("ascii")
+    payload = {
+        "action": "save-gemini-lesson-audio",
+        "audioBase64": audio_b64,
+        "mimeType": "audio/mpeg",
+        "fileName": "",
+        "date": arguments.get("date") or current_date,
+        "time": arguments.get("time") or current_time,
+        "title": arguments.get("title", ""),
+        "level": arguments.get("level", ""),
+        "topic": arguments.get("topic", ""),
+        "text": text,
+    }
+
+    try:
+        first = requests.post(
+            APPS_SCRIPT_URL,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            allow_redirects=False,
+            timeout=120,
+        )
+        location = first.headers.get("Location")
+        if first.status_code in (301, 302, 303, 307, 308) and location:
+            response = requests.get(location, timeout=120)
+        else:
+            response = first
+
+        if response.status_code != 200:
+            return {
+                "status": "error",
+                "http_status": response.status_code,
+                "message": response.text[:3000],
+            }
+
+        try:
+            return response.json()
+        except ValueError:
+            return {
+                "status": "error",
+                "message": "Apps Script returned non-JSON data.",
+                "raw_response": response.text[:3000],
+            }
+    except requests.RequestException as exc:
+        return {"status": "error", "message": f"HTTP request failed: {exc}"}
+
+
+def generate_and_save_gemini_audio(arguments: dict) -> dict:
+    current_date, current_time = now_kst()
+    date = arguments.get("date") or current_date
+    time = arguments.get("time") or current_time
+    output_dir = os.getenv("ABEL_TTS_TMP_DIR", "tmp")
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, f"lesson_{date}_{time}.mp3")
+
+    render_gemini_tts(
+        arguments.get("text", ""),
+        output_path,
+        voice=os.getenv("GEMINI_TTS_VOICE", "Kore"),
+        model=os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-tts"),
+    )
+    result = save_gemini_audio_to_apps_script(arguments, output_path)
+    try:
+        os.remove(output_path)
+    except OSError:
+        pass
+    return result
+
+
 def review_script(client, script: str, title: str, level: str, topic: str) -> dict:
     prompt = (
         SPEECH_QA_PROMPT
@@ -631,7 +711,12 @@ def execute_function(name: str, arguments: dict, client=None) -> dict:
                 "revised_text": arguments.get("text", ""),
             }
 
-    return call_apps_script(arguments)
+    backend = os.getenv("TTS_BACKEND", "gemini").strip().lower()
+    if backend == "google_cloud":
+        return call_apps_script(arguments)
+    if backend != "gemini":
+        return {"status": "error", "message": f"Unknown TTS_BACKEND: {backend}. Use gemini or google_cloud."}
+    return generate_and_save_gemini_audio(arguments)
 
 
 def run(prompt: str) -> None:
