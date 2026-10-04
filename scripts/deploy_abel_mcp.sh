@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Abel Remote MCP one-shot deployment.
-# Run from the repository root on the Mac that has gcloud credentials.
-
 REGION="${REGION:-asia-northeast3}"
 SERVICE="${SERVICE:-abel-mcp}"
 
@@ -19,49 +16,29 @@ PROJECT="${PROJECT:-$(gcloud config get-value project 2>/dev/null)}"
   exit 1
 }
 
-APPS_SCRIPT_URL="${ABEL_APPS_SCRIPT_URL:-$(python3 - <<'PY'
-import re
-from pathlib import Path
-p=Path("scripts/gemini_audio_executor.py")
-if not p.exists():
-    raise SystemExit("")
-s=p.read_text()
-m=re.search(r'default=.*?(https://script\.google\.com/macros/s/[^"\']+/exec)', s)
-if not m:
-    m=re.search(r'https://script\.google\.com/macros/s/[^"\']+/exec', s)
-print(m.group(1) if m else "")
-PY
-)}"
-
-[ -n "$APPS_SCRIPT_URL" ] || {
-  echo "ERROR: could not determine ABEL_APPS_SCRIPT_URL."
-  echo "Set it explicitly: export ABEL_APPS_SCRIPT_URL='https://script.google.com/.../exec'"
+[ -n "${ABEL_DRIVE_FOLDER_ID:-}" ] || {
+  echo "ERROR: ABEL_DRIVE_FOLDER_ID is required."
   exit 1
 }
+
+ENV_VARS="ABEL_DRIVE_FOLDER_ID=${ABEL_DRIVE_FOLDER_ID},GEMINI_TTS_MODEL=${GEMINI_TTS_MODEL:-gemini-3.8-flash-tts},GEMINI_TTS_VOICE=${GEMINI_TTS_VOICE:-Kore}"
+if [ -n "${MCP_AUTH_TOKEN:-}" ]; then
+  ENV_VARS="$ENV_VARS,MCP_AUTH_TOKEN=$MCP_AUTH_TOKEN"
+fi
 
 echo "== Abel MCP deploy =="
 echo "project : $PROJECT"
 echo "region  : $REGION"
 echo "service : $SERVICE"
-echo "apps script: $APPS_SCRIPT_URL"
+echo "drive   : configured"
 echo
-
-ENV_VARS="ABEL_APPS_SCRIPT_URL=$APPS_SCRIPT_URL,TTS_BACKEND=gemini,GEMINI_TTS_MODEL=gemini-3.8-flash-tts,GEMINI_TTS_VOICE=Kore"
-if [ -n "${MCP_AUTH_TOKEN:-}" ]; then
-  ENV_VARS="$ENV_VARS,MCP_AUTH_TOKEN=$MCP_AUTH_TOKEN"
-  echo "MCP auth: enabled"
-else
-  echo "MCP auth: disabled"
-fi
 
 gcloud run deploy "$SERVICE"   --source .   --region "$REGION"   --project "$PROJECT"   --set-env-vars "$ENV_VARS"   --quiet
 
-URL="$(gcloud run services describe "$SERVICE"   --region "$REGION"   --project "$PROJECT"   --format='value(status.url)')"
+URL="$(gcloud run services describe "$SERVICE" --region "$REGION" --project "$PROJECT" --format='value(status.url)')"
 
 echo
 echo "MCP URL: $URL/mcp"
 echo "Health:"
 curl -fsS "$URL/" || true
 echo
-echo
-echo "Next: python3 scripts/mcp_smoke_test.py "$URL/mcp""
