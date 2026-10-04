@@ -66,3 +66,34 @@ A missing semantic review is never PASS.
 Do not invent an official numeric HSK 3.0 Level 6 writing rubric. Abel may produce a descriptive practice score, but it must not be presented as an official HSK score.
 
 Do not state a writing-only time limit as official unless a current authoritative source explicitly confirms it.
+
+
+## Canonical subpart QA specification
+
+### Listening
+- Part 1: 8 — short spoken item + 4 choices; direct comprehension/paraphrase.
+- Part 2: 20 — longer multi-turn/interview-style material + multiple 4-choice questions; speaker tracking, detail integration, purpose/attitude.
+- Part 3: 12 — longer discourse + multiple 4-choice questions; main idea, structure, inference, attitude, purpose.
+- Individual audio word counts and seconds are not treated as official fixed constants; practice timing must be labeled practice timing.
+
+### Reading
+- Part 1: 10 — 选词填空; vocabulary, grammar, collocation, semantic/register fit.
+- Part 2: 10 — 选句填空; cohesion, reference, transitions, logic, paragraph structure.
+- Part 3: 20 — 篇章阅读; main idea, detail, inference, attitude, purpose, structure, implication, paraphrase.
+- Do not invent official fixed character counts for individual passages.
+
+### Writing
+- Task 1 / Q81: practical/applied writing, minimum 150 Chinese characters.
+- Task 2 / Q82: topic/opinion writing, minimum 300 Chinese characters.
+- QA checks task fulfillment, required information, audience/register, organization, coherence, accuracy, lexical precision, and naturalness.
+- No invented official subscore weights or writing-only time limit.
+
+### Speaking boundary
+HSKK Advanced is a separate oral test and is not part of the 82-question written mock:
+- Part 1: 听后复述, 3 questions, about 7 minutes.
+- Part 2: 朗读, 1 question, about 2 minutes.
+- Part 3: 回答问题, 2 questions, about 5 minutes.
+- Total: 6 questions, about 24 minutes including 10 minutes preparation.
+- Total score 100, pass 60; do not invent official subpart point weights.
+
+The semantic QA prompt should verify that generated content matches these subpart purposes and does not import legacy HSK 2.0 structures.
