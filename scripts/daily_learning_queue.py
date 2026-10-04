@@ -94,12 +94,19 @@ def build_queue(language: str, db_path: str | Path, limit: int = 20, days: int =
                 "status": state["status"],
             }
             try:
-                item["due"] = _parse_review_time(state["next_review_at"]) <= now
+                next_review = _parse_review_time(state["next_review_at"])
+                item["due"] = next_review <= now
+                if item["due"]:
+                    item["review_reason"] = "overdue" if next_review < now else "due"
+                else:
+                    item["review_reason"] = "scheduled"
             except ValueError:
                 item["due"] = False
+                item["review_reason"] = "scheduled"
         else:
             item["review_state"] = None
             item["due"] = True
+            item["review_reason"] = "new"
 
     candidates.sort(
         key=lambda x: (
