@@ -79,6 +79,8 @@ def build_queue(language: str, db_path: str | Path, limit: int = 20, days: int =
     now = datetime.now(timezone.utc)
     for item in candidates:
         state = states.get((item["question_id"], item["resource_id"]))
+        if state and state["status"] == "mastered":
+            continue
         if state:
             item["review_state"] = {
                 "review_count": state["review_count"],
