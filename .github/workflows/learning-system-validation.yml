@@ -36,4 +36,5 @@ jobs:
           PYTHONPATH=. python scripts/adaptive_learning_plan_test.py
           PYTHONPATH=. python scripts/hsk_mock_builder_test.py
           PYTHONPATH=. python scripts/hsk_scoring_test.py
+          PYTHONPATH=. python scripts/education_router_test.py
           PYTHONPATH=. python scripts/learning_pipeline_test.py
