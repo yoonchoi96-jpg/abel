@@ -47,6 +47,11 @@ jobs:
           gcloud config set project "gen-lang-client-0543639616"
           echo "Using project: gen-lang-client-0543639616"
 
+      - name: Enable required Google APIs
+        run: |
+          set -euo pipefail
+          gcloud services enable drive.googleapis.com --project "gen-lang-client-0543639616"
+
       - name: Deploy Abel MCP to Cloud Run
         env:
           ABEL_DRIVE_FOLDER_ID: ${{ secrets.ABEL_DRIVE_FOLDER_ID || '1un78ru9F32LCWMY9EDbt8hDPcrP2KHzU' }}
