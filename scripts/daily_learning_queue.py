@@ -10,6 +10,9 @@ import argparse
 import json
 import sqlite3
 from review_state_engine import connect as connect_review
+
+def _parse_review_time(value: str):
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -66,7 +69,45 @@ def build_queue(language: str, db_path: str | Path, limit: int = 20, days: int =
             "last_seen": r["last_seen"],
             "priority": _priority(int(r["wrong_count"]), r["last_seen"], r["error_type"]),
         })
-    candidates.sort(key=lambda x: (-x["priority"], -x["wrong_count"], x["question_id"]))
+    review_con = connect_review(db_path)
+    review_rows = review_con.execute(
+        "SELECT * FROM review_states WHERE language=?",
+        (language,),
+    ).fetchall()
+    review_con.close()
+    states = {(r["question_id"], r["resource_id"]): dict(r) for r in review_rows}
+    now = datetime.now(timezone.utc)
+    for item in candidates:
+        state = states.get((item["question_id"], item["resource_id"]))
+        if state:
+            item["review_state"] = {
+                "review_count": state["review_count"],
+                "correct_count": state["correct_count"],
+                "wrong_count": state["wrong_count"],
+                "consecutive_correct": state["consecutive_correct"],
+                "consecutive_wrong": state["consecutive_wrong"],
+                "last_result": state["last_result"],
+                "interval_days": state["interval_days"],
+                "next_review_at": state["next_review_at"],
+                "status": state["status"],
+            }
+            try:
+                item["due"] = _parse_review_time(state["next_review_at"]) <= now
+            except ValueError:
+                item["due"] = False
+        else:
+            item["review_state"] = None
+            item["due"] = True
+
+    candidates.sort(
+        key=lambda x: (
+            0 if x["due"] else 1,
+            x["review_state"]["next_review_at"] if x["review_state"] else "",
+            -x["priority"],
+            -x["wrong_count"],
+            x["question_id"],
+        )
+    )
     queue = candidates[:limit]
 
     return {
