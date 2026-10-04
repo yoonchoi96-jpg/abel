@@ -13,6 +13,7 @@ RUN apt-get update \
 
 COPY scripts/abel_mcp_server.py .
 COPY scripts/gemini_tts_renderer.py .
+COPY scripts/tts_router.py .
 COPY scripts/audio_style_profiles.py .
 COPY scripts/hsk_evaluation_engine.py .
 COPY scripts/writing_correction_engine.py .
