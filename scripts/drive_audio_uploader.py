@@ -20,14 +20,24 @@ def credentials():
         return service_account.Credentials.from_service_account_info(
             json.loads(raw), scopes=[DRIVE_SCOPE]
         )
+
+    # Prefer the ambient Application Default Credentials supplied by
+    # GitHub Actions WIF / Cloud Run. Those credentials are not a
+    # service-account JSON file and must not be parsed as one.
+    try:
+        creds, _ = google_auth_default(scopes=[DRIVE_SCOPE])
+        return creds
+    except Exception:
+        pass
+
+    # Explicit service-account JSON is a local/manual fallback.
     path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
     if path:
         return service_account.Credentials.from_service_account_file(
             path, scopes=[DRIVE_SCOPE]
         )
-    # Cloud Run / GitHub Actions can provide Application Default Credentials.
-    creds, _ = google_auth_default(scopes=[DRIVE_SCOPE])
-    return creds
+
+    raise RuntimeError("No usable Google credentials found.")
 
 class DrivePublisher:
     def __init__(self, root_folder_id: str):
