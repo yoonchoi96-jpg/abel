@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Abel GitHub Gemini TTS -> Google Drive audio executor.
+"""Abel Gemini TTS -> Google Drive audio executor.
 
 Gemini decides when to call generate_lesson_audio.
 This script executes that function locally, renders Gemini TTS, and publishes the MP3 directly to Google Drive.
@@ -59,8 +59,8 @@ Modes:
   topic to a friend/classmate; relaxed but standard Mandarin; no announcer/teacher style.
 
 Voice formulas:
-- single-speaker modes use Gemini TTS or the existing Chirp backend according to
-  backend policy.
+- single-speaker modes use Gemini TTS only.
+  There is no Google Cloud TTS or Chirp fallback.
 - conversational_dialogue uses Gemini TTS multi-speaker with:
     男 -> Puck
     女 -> Kore
