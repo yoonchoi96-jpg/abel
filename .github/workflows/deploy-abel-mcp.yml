@@ -1,10 +1,19 @@
 name: Deploy Abel MCP
 
 on:
-  workflow_dispatch: {}
   push:
     branches:
       - main
+    paths:
+      - Dockerfile
+      - requirements-mcp.txt
+      - scripts/abel_mcp_server.py
+      - scripts/gemini_tts_renderer.py
+      - scripts/drive_audio_uploader.py
+      - scripts/deploy_abel_mcp.sh
+      - scripts/mcp_smoke_test.py
+      - .github/workflows/deploy-abel-mcp.yml
+  workflow_dispatch:
 
 concurrency:
   group: abel-mcp-production
@@ -15,8 +24,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Abel
+        uses: actions/checkout@v4
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -26,31 +37,34 @@ jobs:
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Select project
+      - name: Configure Google Cloud project
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
         run: |
+          set -euo pipefail
           test -n "$GCP_SA_KEY"
-          PROJECT_ID="$(python3 - <<'PY'
-import json, os
-print(json.loads(os.environ["GCP_SA_KEY"]).get("project_id", ""))
-PY
-)"
+          command -v jq >/dev/null
+          PROJECT_ID="$(printf '%s' "$GCP_SA_KEY" | jq -r '.project_id // empty')"
           test -n "$PROJECT_ID"
           gcloud config set project "$PROJECT_ID"
-          echo "PROJECT_ID=$PROJECT_ID" >> "$GITHUB_ENV"
+          echo "Using project: $PROJECT_ID"
 
-      - name: Deploy Cloud Run
+      - name: Deploy Abel MCP to Cloud Run
         env:
+          ABEL_DRIVE_FOLDER_ID: ${{ secrets.ABEL_DRIVE_FOLDER_ID }}
           MCP_AUTH_TOKEN: ${{ secrets.MCP_AUTH_TOKEN }}
         run: |
+          set -euo pipefail
+          test -n "$ABEL_DRIVE_FOLDER_ID"
           chmod +x scripts/deploy_abel_mcp.sh
           ./scripts/deploy_abel_mcp.sh
 
-      - name: Verify live MCP surface
+      - name: Smoke test live MCP
         env:
           MCP_AUTH_TOKEN: ${{ secrets.MCP_AUTH_TOKEN }}
         run: |
-          URL="$(gcloud run services describe abel-mcp --region asia-northeast3 --format='value(status.url)')"
+          set -euo pipefail
+          URL="$(gcloud run services describe abel-mcp             --region asia-northeast3             --format='value(status.url)')"
+          test -n "$URL"
           python3 -m pip install --quiet "mcp>=1.9,<2" "httpx>=0.28,<1"
           python3 scripts/mcp_smoke_test.py "$URL/mcp"
