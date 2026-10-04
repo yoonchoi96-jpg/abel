@@ -46,7 +46,7 @@ echo "service : $SERVICE"
 echo "apps script: $APPS_SCRIPT_URL"
 echo
 
-ENV_VARS="ABEL_APPS_SCRIPT_URL=$APPS_SCRIPT_URL"
+ENV_VARS="ABEL_APPS_SCRIPT_URL=$APPS_SCRIPT_URL,TTS_BACKEND=gemini,GEMINI_TTS_MODEL=gemini-3.8-flash-tts,GEMINI_TTS_VOICE=Kore"
 if [ -n "${MCP_AUTH_TOKEN:-}" ]; then
   ENV_VARS="$ENV_VARS,MCP_AUTH_TOKEN=$MCP_AUTH_TOKEN"
   echo "MCP auth: enabled"
