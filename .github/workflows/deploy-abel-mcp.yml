@@ -50,10 +50,12 @@ jobs:
       - name: Deploy Abel MCP to Cloud Run
         env:
           ABEL_DRIVE_FOLDER_ID: ${{ secrets.ABEL_DRIVE_FOLDER_ID || '1un78ru9F32LCWMY9EDbt8hDPcrP2KHzU' }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           MCP_AUTH_TOKEN: ${{ secrets.MCP_AUTH_TOKEN }}
         run: |
           set -euo pipefail
           test -n "$ABEL_DRIVE_FOLDER_ID"
+          test -n "$GEMINI_API_KEY"
           chmod +x scripts/deploy_abel_mcp.sh
           ./scripts/deploy_abel_mcp.sh
 
