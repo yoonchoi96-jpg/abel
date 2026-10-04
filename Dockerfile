@@ -6,7 +6,8 @@ COPY requirements-mcp.txt .
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir -r requirements-mcp.txt
+    && pip install --no-cache-dir -r requirements-mcp.txt \
+    && pip install --no-cache-dir "google-genai>=2.0,<3"
 
 COPY scripts/abel_mcp_server.py .
 COPY scripts/gemini_tts_renderer.py .
