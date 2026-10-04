@@ -24,26 +24,116 @@ For HSK 3.0 Level 6:
 - Do not state a writing-only time limit as official unless an authoritative current source explicitly confirms it.
 - For the 2026-12-13 Korea test, treat HSK and HSKK as separate registrations/tests; do not assume the trial-test bundled oral rule.
 
-### Level 6 written layout
+### Level 6 written layout — SUBPART SPECIFICATION (MANDATORY)
 
-Use these canonical numbers for a full Level 6 mock:
-- 1–40 Listening
-- 41–80 Reading
-- 81 Writing Task 1
-- 82 Writing Task 2
+Canonical full mock: 1–40 Listening, 41–80 Reading, 81–82 Writing.
 
-Reading structure:
-- Part 1: 10 questions — 选词填空
-- Part 2: 10 questions — 选句填空
-- Part 3: 20 questions — 篇章阅读
+Important: HSK 3.0 fixes the counts and task types below, but do NOT invent an official universal word-count or seconds-per-item for individual stimuli. If Abel uses numeric practice ranges, label them as practice targets.
 
-Listening structure:
-- Part 1: 8
-- Part 2: 20
-- Part 3: 12
-- Total 40
+#### LISTENING — 40
 
-Do not import old HSK 6 rules such as 50 listening + 50 reading + 1 writing task.
+**Part 1 / 第1部分: 8 questions**
+- Type: short spoken item + 4 choices; choose the statement matching the audio.
+- Tests: direct comprehension, key information, paraphrase, qualifiers.
+- Length: short/self-contained; variable, no invented official word/second limit.
+- Traps: negation, qualification, changed time/person/object, plausible unsupported detail.
+- QA: one defensible answer; no wording/length leakage.
+
+**Part 2 / 第2部分: 20 questions**
+- Type: longer multi-turn/interview-style listening; multiple questions per material; 4 choices.
+- Tests: tracking speakers, detail integration, purpose/attitude, paraphrase.
+- Length: longer than Part 1; variable; no invented official word/second limit.
+- Traps: true-but-not-answering choices, speaker-switch confusion, near-synonym traps.
+- QA: every answer must be recoverable from audio alone.
+
+**Part 3 / 第3部分: 12 questions**
+- Type: longer discourse(s) + several questions; 4 choices.
+- Tests: main idea, structure, inference, attitude, purpose, multi-detail integration.
+- Length: generally most information-dense listening; variable; no invented official word/second limit.
+- Traps: local detail vs main idea, implied conclusion, causality/chronology, overgeneralization.
+- QA: questions should cover different information layers.
+
+Do not invent official Part 1/2/3 time allocations. Practice timing must be labeled practice timing.
+
+#### READING — 40
+
+**Part 1 / 第1部分: 10 questions — 选词填空**
+- Type: passage with multiple blanks; choose the best word/phrase for each blank.
+- Tests: vocabulary, grammar, collocation, semantic/register fit.
+- Length: short passage, variable; no invented official character count.
+- Traps: near-synonyms, same-POS distractors, 成语, grammar-compatible but collocationally wrong options.
+- QA: exactly one defensible answer per blank.
+
+**Part 2 / 第2部分: 10 questions — 选句填空**
+- Type: passage(s) with missing sentence position(s); choose the sentence that best fits.
+- Tests: cohesion, reference, transitions, logic, topic development, paragraph structure.
+- Length: short-to-medium, variable; no invented official character count.
+- Traps: keyword matching, locally plausible but globally wrong sentence, wrong referent/time/logic.
+- QA: evaluate both surrounding context and whole-paragraph structure.
+
+**Part 3 / 第3部分: 20 questions — 篇章阅读**
+- Type: several longer passages + multiple 4-choice questions.
+- Tests: main idea, detail, inference, attitude, purpose, structure, implication, paraphrase.
+- Length: longer/information-dense than Parts 1–2; variable; no invented official character count.
+- Traps: extreme wording, partial truth, reversed causality, scope shift, unsupported inference.
+- QA: every answer text-supported; avoid repeated testing of the same detail.
+
+#### WRITING — 2
+
+**Task 1 / 第81题: practical/applied writing**
+- Minimum: **150 Chinese characters**.
+- Type: realistic functional text for a specified audience/purpose; e.g. notice/recruitment/application/request/explanation.
+- Official sample includes an online roommate-recruitment notice.
+- Tests: task fulfillment, required information, audience/register, organization, natural accurate Mandarin.
+- Traps: missing required points, wrong register, padding, disconnected sentences.
+- QA: prompt must contain enough information for a genuine 150+ character response.
+
+**Task 2 / 第82题: topic/opinion writing**
+- Minimum: **300 Chinese characters**.
+- Type: develop a position on an abstract/social/scientific/cultural topic.
+- Official sample asks whether scientific development promotes or inhibits people's all-round development.
+- Tests: thesis, reasoning, development/examples, coherence, lexical/syntactic control, qualification/counterpoint when useful.
+- Traps: memorized generic essay, thesis drift, irrelevant examples, repetition, unsupported absolutes, padding.
+- QA: prompt must permit a genuine 300+ character response without hidden outside knowledge.
+
+Writing scoring: never invent official subscore weights. Abel may score task fulfillment, relevance, organization, accuracy, lexical precision, collocation, register, and naturalness descriptively. Never call that an official HSK score. Do not invent an official writing-only time limit.
+
+#### SPEAKING — HSKK 高级 (separate oral test)
+
+For HSK 6 preparation, use HSKK Advanced; do NOT merge it into the 82-question written mock.
+- 6 questions, 3 parts.
+- About 24 minutes total including 10 minutes preparation.
+- 100 points total; 60 pass.
+- No reliable official numeric subpart weights: never invent them.
+
+**Part 1 / 第1部分: 听后复述 — 3 questions, about 7 min**
+Listen to a passage and retell it. Tests listening retention + coherent oral reformulation. Focus on main content, relations/sequence/causality, accuracy, fluency.
+
+**Part 2 / 第2部分: 朗读 — 1 question, about 2 min**
+Read a supplied passage aloud. Tests pronunciation, prosody, fluency, accurate decoding. Focus on pronunciation, rhythm, pauses, intonation, completeness.
+
+**Part 3 / 第3部分: 回答问题 — 2 questions, about 5 min**
+Read two questions and answer orally. Tests relevance, spontaneous organization, reasoning, and fluency. Focus on directly answering, developing reasons/examples, coherence. Traps: generic memorized answers, partial answers, repetition.
+
+HSKK practice QA: completeness/relevance, coherence, fluency, grammar, vocabulary, pronunciation/prosody as appropriate. HSKK Advanced is distinct from the HSK 3.0 Level 7–9 integrated exam.
+
+#### CANONICAL TABLE
+
+| Component | Part | Questions | Type | Length rule |
+|---|---|---:|---|---|
+| Listening | 1 | 8 | short audio + 4-choice | variable |
+| Listening | 2 | 20 | multi-turn/interview + 4-choice | variable |
+| Listening | 3 | 12 | longer discourse + 4-choice | variable |
+| Reading | 1 | 10 | 选词填空 | variable; multiple blanks |
+| Reading | 2 | 10 | 选句填空 | variable |
+| Reading | 3 | 20 | 篇章阅读 + 4-choice | variable; longer passages |
+| Writing | 81 | 1 | practical writing | ≥150字 |
+| Writing | 82 | 1 | topic/opinion | ≥300字 |
+| HSKK Adv. | 1 | 3 | 听后复述 | ≈7 min |
+| HSKK Adv. | 2 | 1 | 朗读 | ≈2 min |
+| HSKK Adv. | 3 | 2 | 回答问题 | ≈5 min |
+
+Never import old HSK 2.0: 15/15/20 listening, four-part reading, one 45-minute essay, or 101 total questions.
 
 ## EDUCATIONAL PRINCIPLES
 
