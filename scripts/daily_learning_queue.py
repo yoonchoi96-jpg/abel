@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+from review_state_engine import connect as connect_review
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -38,6 +39,7 @@ def build_queue(language: str, db_path: str | Path, limit: int = 20, days: int =
 
     con = sqlite3.connect(db_path)
     con.row_factory = sqlite3.Row
+    connect_review(db_path).close()
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     rows = con.execute(
         """SELECT question_id, resource_id, kind, level, error_type,
