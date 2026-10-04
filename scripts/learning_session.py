@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 DB = Path("data/abel_learning.db")
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 def connect(path=DB):
     path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
@@ -54,7 +54,7 @@ def record_session(session: dict, db_path=DB):
           session.get("session_type"),session.get("level"),row.get("error_type"),now))
     con.commit(); con.close(); return session_id
 
-def summary(language, db_path=DB):
+def record_provider_event(language: str, task_type: str, output: dict, *, model=None, cache_key=None, input_summary="", db_path=DB):\n    if not language or not task_type:\n        raise ValueError("language and task_type are required")\n    now=datetime.now(timezone.utc).isoformat()\n    con=connect(db_path)\n    cur=con.execute("""INSERT INTO provider_learning_events\n      (language,task_type,model,cache_key,input_summary,output_json,created_at)\n      VALUES(?,?,?,?,?,?,?)""",(language,task_type,model,cache_key,input_summary,\n      json.dumps(output,ensure_ascii=False),now))\n    con.commit(); con.close(); return cur.lastrowid\n\ndef provider_summary(language, db_path=DB):\n    con=connect(db_path)\n    rows=con.execute("""SELECT task_type,COUNT(*) count,MAX(created_at) last_created_at\n      FROM provider_learning_events WHERE language=? GROUP BY task_type ORDER BY count DESC,task_type""",(language,)).fetchall()\n    con.close()\n    return {"schema_version":"abel.learning.provider-summary.v1","language":language,"events":[dict(r) for r in rows]}\n\ndef summary(language, db_path=DB):
     con=connect(db_path)
     rows=con.execute("""SELECT session_type,COUNT(*) n,AVG(score) avg_score,
       SUM(duration_seconds) seconds FROM learning_sessions WHERE language=? GROUP BY session_type""",(language,)).fetchall()
