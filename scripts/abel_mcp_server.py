@@ -186,11 +186,14 @@ def generate_lesson_audio(
     title: str = "",
     level: str = "HSK6",
     topic: str = "",
+    language: str = "zh-CN",
+    delivery_mode: str = "casual_explanation",
+    speaker_mode: str = "single",
 ) -> dict:
-    """Generate a Chinese listening lesson MP3 with Gemini TTS and save it directly to Google Drive.
+    """Generate a routed lesson MP3 and save it directly to Google Drive.
 
-    Production audio is Gemini TTS only. Apps Script and Google Cloud TTS are not
-    used by this MCP tool.
+    The current production route is zh-CN -> Gemini TTS. Unsupported language or
+    speaker routes fail closed instead of silently using the wrong configuration.
     """
     text = (text or "").strip()
     if not text:
@@ -211,8 +214,11 @@ def generate_lesson_audio(
             render_gemini_tts(
                 text,
                 mp3_path,
-                voice=os.getenv("GEMINI_TTS_VOICE", "Kore"),
-                model=os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-tts"),
+                voice=None,
+                model=None,
+                language=language,
+                delivery_mode=delivery_mode,
+                speaker_mode=speaker_mode,
             )
         except Exception as exc:
             return {
