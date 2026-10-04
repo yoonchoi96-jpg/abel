@@ -1,0 +1,60 @@
+name: Abel Gemini TTS → Google Drive
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: "Lesson request for Abel"
+        required: true
+        type: string
+      title:
+        description: "Optional lesson title"
+        required: false
+        type: string
+      level:
+        description: "Lesson level"
+        required: false
+        default: "HSK6"
+        type: string
+      topic:
+        description: "Optional topic"
+        required: false
+        type: string
+
+jobs:
+  generate-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Abel
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - name: Install Abel dependencies
+        run: pip install -r requirements.txt
+      - name: Verify Google Drive access
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          ABEL_DRIVE_FOLDER_ID: ${{ secrets.ABEL_DRIVE_FOLDER_ID }}
+        run: python scripts/drive_audio_uploader.py --self-test
+      - name: Generate lesson, Gemini TTS, and publish to Drive
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          ABEL_DRIVE_FOLDER_ID: ${{ secrets.ABEL_DRIVE_FOLDER_ID }}
+          GEMINI_MODEL: "gemini-3.8-flash"
+          GEMINI_TTS_MODEL: "gemini-3.8-flash-tts"
+          GEMINI_TTS_VOICE: "Kore"
+        run: |
+          python scripts/gemini_audio_executor.py \
+            "${{ inputs.prompt }}" \
+            --title "${{ inputs.title }}" \
+            --level "${{ inputs.level }}" \
+            --topic "${{ inputs.topic }}"
