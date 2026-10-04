@@ -3,23 +3,67 @@ on:
   push:
     paths:
       - "scripts/gemini_tts_casual.py"
+      - "scripts/gemini_tts_renderer.py"
+      - "scripts/tts_router.py"
+      - "scripts/drive_audio_uploader.py"
       - ".github/workflows/gemini-tts-casual.yml"
   workflow_dispatch:
+
 jobs:
   render:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r requirements.txt
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/382528581049/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: abel-github-deploy@gen-lang-client-0543639616.iam.gserviceaccount.com
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install runtime dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          python3 -m pip install --upgrade pip
+          python3 -m pip install "google-genai>=2.0,<3" "google-auth>=2.0,<3"
+
       - name: Generate canonical routed Gemini TTS sample
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_TTS_MODEL: "gemini-3.8-flash-tts"
           GEMINI_TTS_VOICE: "Kore"
         run: python scripts/gemini_tts_casual.py
+
+      - name: Verify MP3
+        run: |
+          test -s gemini_tts_hsk6_casual.mp3
+          file gemini_tts_hsk6_casual.mp3
+          ls -lh gemini_tts_hsk6_casual.mp3
+
+      - name: Publish MP3 to Chinese Drive
+        env:
+          ABEL_DRIVE_FOLDER_ID: ${{ secrets.ABEL_DRIVE_FOLDER_ID || '1un78ru9F32LCWMY9EDbt8hDPcrP2KHzU' }}
+          GEMINI_TTS_MODEL: "gemini-3.8-flash-tts"
+          GEMINI_TTS_VOICE: "Kore"
+        run: |
+          python scripts/drive_audio_uploader.py \
+            --file gemini_tts_hsk6_casual.mp3 \
+            --date "$(date -u +%Y-%m-%d)" \
+            --time "$(date -u +%H%M%S)" \
+            --title "Abel Gemini TTS canonical smoke test" \
+            --level "HSK6" \
+            --topic "Deep-sea floating offshore wind power" \
+            --text "Canonical Abel Gemini TTS production smoke test."
+
       - uses: actions/upload-artifact@v4
         with:
           name: abel-canonical-gemini-tts-hsk6-casual
