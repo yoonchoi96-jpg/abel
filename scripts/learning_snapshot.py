@@ -98,6 +98,23 @@ def render_markdown(snapshot: dict) -> str:
             f"Natural: {x['natural_version']}",
             f"Advanced: {x['advanced_version']}",
         ]
+    lines += ["", "## Compact learning memory"]
+    memory = snapshot.get("learning_memory", {})
+    errors = memory.get("recurring_error_signals", [])
+    vocab = memory.get("vocabulary_usage_signals", [])
+    lines.append(f"- Provider events analyzed: {memory.get('event_count', 0)}")
+    if errors:
+        lines.append("- Recurring provider error signals:")
+        for x in errors[:20]:
+            lines.append(f"  - {x.get('type')}: {x.get('count')}")
+    else:
+        lines.append("- No recurring provider error signals yet.")
+    if vocab:
+        lines.append("- Recurring vocabulary-usage signals:")
+        for x in vocab[:20]:
+            lines.append(f"  - {x.get('word')} / {x.get('status')}: {x.get('count')}")
+    else:
+        lines.append("- No recurring vocabulary-usage signals yet.")
     lines += [
         "", "## Gemini usage rules",
         "- Use this file to adapt exercises to recurring weaknesses.",
