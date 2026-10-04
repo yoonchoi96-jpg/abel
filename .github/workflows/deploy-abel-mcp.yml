@@ -68,3 +68,5 @@ jobs:
           test -n "$URL"
           python3 -m pip install --quiet "mcp>=1.9,<2" "httpx>=0.28,<1"
           python3 scripts/mcp_smoke_test.py "$URL/mcp" --call
+
+# production retrigger
