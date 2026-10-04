@@ -15,8 +15,11 @@ from pathlib import Path
 from google import genai
 from google.genai import types
 
-DEFAULT_MODEL = "gemini-3.8-flash-tts"
-DEFAULT_VOICE = "Kore"
+try:
+    from tts_router import resolve_tts_route
+except ModuleNotFoundError:
+    from scripts.tts_router import resolve_tts_route
+
 SAMPLE_RATE = 24000
 
 
@@ -44,6 +47,9 @@ def render_gemini_tts(
     model: str | None = None,
     style: str | None = None,
     bitrate: str = "128k",
+    language: str = "zh-CN",
+    delivery_mode: str = "casual_explanation",
+    speaker_mode: str = "single",
 ) -> Path:
     script = (text or "").strip()
     if not script:
@@ -54,13 +60,14 @@ def render_gemini_tts(
         raise RuntimeError("GEMINI_API_KEY is not set.")
 
     client = genai.Client(api_key=api_key)
-    model_name = model or os.getenv("GEMINI_TTS_MODEL", DEFAULT_MODEL)
-    voice_name = voice or os.getenv("GEMINI_TTS_VOICE", DEFAULT_VOICE)
-    style_text = style or os.getenv(
-        "GEMINI_TTS_STYLE",
-        "Natural, clear Standard Mandarin for HSK listening practice. "
-        "Use restrained, realistic spoken prosody. Preserve the transcript exactly.",
+    route = resolve_tts_route(
+        language,
+        delivery_mode=delivery_mode,
+        speaker_mode=speaker_mode,
     )
+    model_name = model or route.model
+    voice_name = voice or route.voice
+    style_text = style or route.style
 
     response = client.models.generate_content(
         model=model_name,
