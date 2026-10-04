@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 """Gemini TTS renderer for Abel.
 
-Generates 24 kHz mono PCM with Gemini TTS and converts it to MP3 locally.
-The Drive/Apps Script layer is intentionally storage-only.
+Gemini 3.8 Flash TTS returns a complete WAV file for unary requests.
+The Drive/Apps Script layer is storage-only.
 """
-
 from __future__ import annotations
 
 import os
 import shutil
 import subprocess
 import tempfile
-import wave
 from pathlib import Path
 
 from google import genai
@@ -20,43 +18,19 @@ from google.genai import types
 DEFAULT_MODEL = "gemini-3.8-flash-tts"
 DEFAULT_VOICE = "Kore"
 SAMPLE_RATE = 24000
-CHANNELS = 1
-SAMPLE_WIDTH = 2
-
-
-def pcm_to_wav(pcm: bytes, output_path: str | Path) -> Path:
-    if not pcm:
-        raise ValueError("Gemini TTS returned empty PCM audio.")
-    path = Path(output_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with wave.open(str(path), "wb") as wf:
-        wf.setnchannels(CHANNELS)
-        wf.setsampwidth(SAMPLE_WIDTH)
-        wf.setframerate(SAMPLE_RATE)
-        wf.writeframes(pcm)
-    return path
 
 
 def wav_to_mp3(wav_path: str | Path, mp3_path: str | Path, bitrate: str = "128k") -> Path:
     if shutil.which("ffmpeg") is None:
-        raise RuntimeError("ffmpeg is required to convert Gemini PCM/WAV to MP3.")
-
+        raise RuntimeError("ffmpeg is required to convert Gemini WAV to MP3.")
     source = Path(wav_path)
     target = Path(mp3_path)
     target.parent.mkdir(parents=True, exist_ok=True)
-
-    subprocess.run(
-        [
-            "ffmpeg", "-y", "-loglevel", "error",
-            "-i", str(source),
-            "-codec:a", "libmp3lame",
-            "-b:a", bitrate,
-            "-ar", str(SAMPLE_RATE),
-            "-ac", str(CHANNELS),
-            str(target),
-        ],
-        check=True,
-    )
+    subprocess.run([
+        "ffmpeg", "-y", "-loglevel", "error", "-i", str(source),
+        "-codec:a", "libmp3lame", "-b:a", bitrate, "-ar", str(SAMPLE_RATE), "-ac", "1",
+        str(target),
+    ], check=True)
     if not target.exists() or target.stat().st_size == 0:
         raise RuntimeError("ffmpeg produced no MP3 output.")
     return target
@@ -84,26 +58,23 @@ def render_gemini_tts(
     voice_name = voice or os.getenv("GEMINI_TTS_VOICE", DEFAULT_VOICE)
     style_text = style or os.getenv(
         "GEMINI_TTS_STYLE",
-        "Standard Mandarin. Natural, clear, educated HSK listening delivery. "
-        "Do not sound like a news anchor. Preserve every word and fact. "
-        "Use natural phrasing and restrained prosody; do not add fillers.",
+        "Natural, clear Standard Mandarin for HSK listening practice. "
+        "Use restrained, realistic spoken prosody. Preserve the transcript exactly.",
     )
-
-    prompt = f"{style_text}\n\nRead the following Chinese script exactly as written:\n{script}"
 
     response = client.models.generate_content(
         model=model_name,
         contents=[types.Content(
             role="user",
-            parts=[types.Part.from_text(text=prompt)],
+            parts=[types.Part.from_text(text=script, speech_metadata={
+                "style": style_text,
+            })],
         )],
         config=types.GenerateContentConfig(
             response_modalities=["AUDIO"],
             speech_config=types.SpeechConfig(
                 voice_config=types.VoiceConfig(
-                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                        voice_name=voice_name
-                    )
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice_name)
                 )
             ),
         ),
@@ -122,7 +93,7 @@ def render_gemini_tts(
 
     with tempfile.TemporaryDirectory(prefix="abel-gemini-tts-") as tmp:
         wav = Path(tmp) / "speech.wav"
-        pcm_to_wav(bytes(data), wav)
+        wav.write_bytes(bytes(data))
         wav_to_mp3(wav, target, bitrate=bitrate)
 
     return target
