@@ -3,7 +3,11 @@
 from __future__ import annotations
 from typing import Any
 
-TASKS=("chinese_writing_correction","translation","chinese_explanation","vocabulary_review","hsks_exam_qa","adaptive_learning_plan","listening_transcript_analysis","speaking_feedback")
+TASKS=(
+    "chinese_writing_correction","translation","chinese_explanation","vocabulary_review",
+    "hsks_exam_qa","adaptive_learning_plan","listening_transcript_analysis","speaking_feedback",
+    "listening_practice","reading_practice","writing_practice","mock_test","error_review",
+)
 
 def prepare(task_type:str,payload:dict[str,Any])->dict[str,Any]:
     if task_type not in TASKS: raise ValueError(f"unsupported_task:{task_type}")
