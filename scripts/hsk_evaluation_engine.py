@@ -354,7 +354,12 @@ def _validate_deterministic_report(report: dict[str, Any]) -> list[str]:
     if missing:
         return [f"Missing deterministic-report fields: {', '.join(missing)}"]
 
-    if report.get("engine") != "Abel HSK Evaluation Engine":
+    engine = report.get("engine")
+    supported_engines = {
+        "Abel HSK Evaluation Engine",
+        "Abel HSK 3.0 Level 6 Evaluation Engine",
+    }
+    if engine not in supported_engines:
         return ["deterministic_report.engine is not an Abel evaluation-engine report."]
 
     if not isinstance(report.get("version"), str) or not report["version"].strip():
@@ -371,10 +376,14 @@ def _validate_deterministic_report(report: dict[str, Any]) -> list[str]:
     if not isinstance(metrics, dict):
         return ["deterministic_report.metrics must be an object."]
 
-    question_count = metrics.get("question_count")
+    if engine == "Abel HSK 3.0 Level 6 Evaluation Engine":
+        question_count = metrics.get("task_count")
+    else:
+        question_count = metrics.get("question_count")
+
     question_numbers = metrics.get("question_numbers")
     if not isinstance(question_count, int) or isinstance(question_count, bool) or question_count < 0:
-        return ["deterministic_report.metrics.question_count must be a non-negative integer."]
+        return ["deterministic_report.metrics question count must be a non-negative integer."]
 
     if not isinstance(question_numbers, list) or not all(
         isinstance(n, int) and not isinstance(n, bool) and n > 0 for n in question_numbers
@@ -382,7 +391,7 @@ def _validate_deterministic_report(report: dict[str, Any]) -> list[str]:
         return ["deterministic_report.metrics.question_numbers must be an array of positive integers."]
 
     if len(question_numbers) != question_count:
-        return ["deterministic_report.metrics.question_numbers length must equal question_count."]
+        return ["deterministic_report.metrics.question_numbers length must equal the reported question count."]
 
     if len(set(question_numbers)) != len(question_numbers):
         return ["deterministic_report.metrics.question_numbers must be unique."]
@@ -391,7 +400,6 @@ def _validate_deterministic_report(report: dict[str, Any]) -> list[str]:
         return ["deterministic_report.findings must be an array."]
 
     return []
-
 
 def finalize_review(
     deterministic_report: dict[str, Any],
