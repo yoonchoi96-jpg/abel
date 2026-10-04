@@ -1,108 +1,68 @@
-# Abel HSK Evaluation Engine v1.2
+# Abel HSK 3.0 Level 6 Evaluation Engine
 
-Abel's HSK QA is deliberately split into two layers.
+Abel production QA now targets **HSK 3.0 Level 6**, not legacy HSK 2.0.
 
-## Layer 1 — deterministic QA
+## Canonical full written mock
 
-`scripts/hsk_evaluation_engine.py` checks properties that do not require an LLM:
+- Listening: 1–40 (40 questions)
+- Reading: 41–80 (40 questions)
+  - Part 1: 41–50 — 选词填空
+  - Part 2: 51–60 — 选句填空
+  - Part 3: 61–80 — 篇章阅读
+- Writing: 81–82
+  - 81: practical/applied writing, minimum 150 Chinese characters
+  - 82: topic/opinion writing, minimum 300 Chinese characters
 
-- answer distribution
-- repeated answer runs
-- question count and part ranges
-- malformed questions/options
-- duplicate stems/options
-- concentration of absolute/extreme wording in distractors
-- correct-option-as-uniquely-longest bias
-- option length outliers
-- surface/grammar-shape leakage
+The production MCP tool rejects the legacy 101-question HSK 2.0 layout.
 
-These are warnings unless the structure is invalid; they are not claims that an individual question is semantically wrong.
+## Two-layer QA
 
-## Layer 2 — semantic/expert QA
+### Layer 1 — deterministic QA
 
-The same module builds a Gemini-ready adversarial review prompt covering recurring expert-review findings:
+`scripts/hsk30_evaluation_engine.py` checks:
 
-- answer uniqueness / multiple valid answers
-- distractor plausibility
-- copied wording / shallow paraphrase
-- transcript-question-answer consistency
-- explanation consistency with the current revision
-- natural contemporary Mandarin
-- factual accuracy requiring verification
-- repeated error-type design
-- one-token/one-blank triviality
-- regression after a revision
+- exact 1–82 layout;
+- duplicate/missing question numbers;
+- listening/reading/writing part ranges;
+- four-option/A-D format for questions 1–80;
+- writing task type and minimum character declaration;
+- answer distribution;
+- repeated answer runs;
+- option-length leakage;
+- obvious extreme-word clues.
 
-The deterministic report tells the reviewer what can be measured, while the LLM layer decides what requires linguistic or semantic judgment. The semantic reviewer must return exactly one question review for every supplied question number; unresolved factual verification also prevents release.
+These are structural/statistical signals. They do not decide Mandarin semantic correctness.
 
-## MCP
+### Layer 2 — semantic/expert QA
 
-`evaluate_hsk_content` is exposed by `scripts/abel_mcp_server.py`. For a full HSK6 exam (`expected_total=101`), Abel also validates the exact 1–50 listening, 51–100 reading, 101 writing number layout.
+Gemini receives the generated adversarial review prompt and checks:
 
-Inputs:
-- `questions_json`: JSON array of question objects
-- `transcript`: optional source transcript
-- `reference_facts`: optional fact/reference notes
-- `expected_total`: optional expected question count
-- `expected_distribution_json`: optional expected answer distribution, e.g. `{"A":22,"B":23,"C":23,"D":22}`
+- answer uniqueness / multiple valid answers;
+- distractor plausibility;
+- natural contemporary Mandarin;
+- transcript/passage alignment;
+- paraphrase depth;
+- factual accuracy requiring verification;
+- HSK 3.0 Level 6 difficulty;
+- Reading Part 1/2/3 skill alignment;
+- writing task fulfillment;
+- explanation consistency;
+- regressions after revision.
 
-The tool returns the deterministic report plus `semantic_review_prompt`.
+## Release loop
 
-## Intended generation loop
-
-1. Gemini Spark generates the mock exam.
+1. Gemini generates HSK 3.0 Level 6 material.
 2. Abel deterministic QA runs.
-3. Gemini performs semantic/expert QA using the returned review prompt.
+3. Gemini performs semantic/adversarial QA.
 4. Failures are revised.
 5. Abel QA runs again.
-6. The revised version is checked for regression before acceptance.
+6. Semantic QA is repeated after revisions.
+7. `finalize_hsk_review` is the release gate.
 
-Abel must never treat a single reviewer comment as a permanent prohibition. New reviewer feedback should be generalized only when it represents a reusable evaluation rule.
+A missing semantic review is never PASS.
 
+## Important boundary
 
-## Release gate
+Do not invent an official numeric HSK 3.0 Level 6 writing rubric. Abel may produce a descriptive practice score, but it must not be presented as an official HSK score.
 
-The MCP surface exposes two QA stages:
-
-1. `evaluate_hsk_content` runs deterministic structural/statistical checks and returns `semantic_review_prompt`.
-2. Gemini (or another semantic reviewer) evaluates that prompt and returns the documented JSON review contract.
-3. `finalize_hsk_review` combines the deterministic report with the semantic JSON.
-4. A missing semantic review is **REVIEW**, never PASS. A semantic review with `pass=false` or any `critical_issues` is **REVIEW**. Only a deterministic PASS plus a valid semantic PASS with no critical issues produces `release_ready=true`.
-
-This keeps the Python service from pretending it can judge Mandarin semantics while still giving the calling agent a hard machine-readable release gate.
-
-## Live MCP smoke test
-
-`scripts/mcp_smoke_test.py` now verifies that the live server exposes:
-
-- `generate_lesson_audio`
-- `evaluate_hsk_content`
-- `finalize_hsk_review`
-
-It also executes the two QA tools with a minimal fixture after MCP initialization.
-
-
-## Gate contract hardening
-
-The evaluate_hsk_content tool keeps the deterministic QA status (PASS, REVIEW, or FAIL) in status and uses tool_status="success" only for transport/tool success. This prevents a successful MCP invocation from masking a failed QA report.
-
-The finalize_hsk_review tool now blocks release when:
-- deterministic status is anything other than PASS
-- semantic pass is not a real boolean
-- the semantic review has malformed arrays or question-review entries
-- question-review coverage does not exactly match the deterministic question numbers
-- any question review is revise or reject
-- unresolved factual verification items remain
-
-The release gate is therefore a composition of deterministic QA plus complete semantic review, rather than a best-effort JSON merge.
-
-## CI parity
-
-The validation workflow installs both the general project dependencies and the production MCP dependency set from requirements-mcp.txt, then imports the production MCP server and checks that the three required tool functions register before running the full test suite.
-
-
-## MCP transport and security
-
-The production server exposes a JSON health endpoint at `/`. The CI pipeline starts the real server process and runs the MCP smoke test against `http://127.0.0.1:8080/mcp`, in addition to unit tests and import checks.
-
-`MCP_AUTH_TOKEN` is optional. When present, Abel configures FastMCP static Bearer-token authentication; when absent, the existing unauthenticated development behavior is preserved. The deployment script forwards the token only when the environment variable is set. The token should be provisioned as a runtime secret rather than committed to the repository.
+Do not state a writing-only time limit as official unless a current authoritative source explicitly confirms it.
