@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 DB = Path("data/abel_learning.db")
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 def connect(path=DB):
     path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
@@ -17,7 +17,14 @@ def connect(path=DB):
       resource_id TEXT, level TEXT, started_at TEXT NOT NULL, duration_seconds INTEGER,
       score REAL, total INTEGER, correct INTEGER, payload_json TEXT NOT NULL,
       created_at TEXT NOT NULL)""")
+    con.execute("""CREATE TABLE IF NOT EXISTS practice_errors(
+      id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER NOT NULL,
+      language TEXT NOT NULL, question_id TEXT NOT NULL, resource_id TEXT,
+      kind TEXT, level TEXT, error_type TEXT, occurred_at TEXT NOT NULL,
+      FOREIGN KEY(session_id) REFERENCES learning_sessions(id))""")
     con.execute("CREATE INDEX IF NOT EXISTS idx_learning_sessions_lang_time ON learning_sessions(language, started_at)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_practice_errors_lang_type ON practice_errors(language, error_type)")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_practice_errors_lang_question ON practice_errors(language, question_id)")
     con.commit(); return con
 
 def record_session(session: dict, db_path=DB):
@@ -32,15 +39,34 @@ def record_session(session: dict, db_path=DB):
       session["language"],session["session_type"],session.get("resource_id"),session.get("level"),
       session.get("started_at",now),session.get("duration_seconds"),session.get("score"),
       session.get("total"),session.get("correct"),json.dumps(session,ensure_ascii=False),now))
-    con.commit(); rid=cur.lastrowid; con.close(); return rid
+    session_id=cur.lastrowid
+    payload=session.get("payload",{})
+    for row in payload.get("results",[]) if isinstance(payload,dict) else []:
+        if row.get("correct") is True:
+            continue
+        qid=str(row.get("question_id","")).strip()
+        if not qid:
+            continue
+        con.execute("""INSERT INTO practice_errors
+          (session_id,language,question_id,resource_id,kind,level,error_type,occurred_at)
+          VALUES(?,?,?,?,?,?,?,?)""",(
+          session_id,session["language"],qid,session.get("resource_id"),
+          session.get("session_type"),session.get("level"),row.get("error_type"),now))
+    con.commit(); con.close(); return session_id
 
 def summary(language, db_path=DB):
     con=connect(db_path)
     rows=con.execute("""SELECT session_type,COUNT(*) n,AVG(score) avg_score,
       SUM(duration_seconds) seconds FROM learning_sessions WHERE language=? GROUP BY session_type""",(language,)).fetchall()
+    errors=con.execute("""SELECT error_type,COUNT(*) count,COUNT(DISTINCT question_id) questions
+      FROM practice_errors WHERE language=? GROUP BY error_type ORDER BY count DESC,error_type""",(language,)).fetchall()
     con.close()
-    return {"schema_version":"abel.learning.session-summary.v1","language":language,
-            "session_types":[dict(r) for r in rows]}
+    return {
+      "schema_version":"abel.learning.session-summary.v2",
+      "language":language,
+      "session_types":[dict(r) for r in rows],
+      "practice_errors":[dict(r) for r in errors],
+    }
 
 if __name__=="__main__":
     p=argparse.ArgumentParser(); p.add_argument("--language",required=True); p.add_argument("--summary",action="store_true")
