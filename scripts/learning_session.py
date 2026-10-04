@@ -60,7 +60,7 @@ def record_session(session: dict, db_path=DB):
             apply_result(
                 session["language"], qid, str(resource_id), row.get("correct") is True,
                 kind=session.get("session_type"), level=session.get("level"),
-                at=now, db_path=db_path,
+                at=now, db_path=db_path, connection=con,
             )
     con.commit(); con.close(); return session_id
 
