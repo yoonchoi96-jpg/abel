@@ -68,6 +68,18 @@ def record_provider_event(language: str, task_type: str, output: dict, *, model=
       language,task_type,model,cache_key,input_summary,json.dumps(output,ensure_ascii=False),now))
     con.commit(); con.close(); return cur.lastrowid
 
+def provider_recent(language, db_path=DB, limit=20):
+    con=connect(db_path)
+    rows=con.execute("""SELECT task_type,model,cache_key,input_summary,output_json,created_at FROM provider_learning_events WHERE language=? ORDER BY id DESC LIMIT ?""",(language,limit)).fetchall()
+    con.close()
+    out=[]
+    for r in rows:
+        x=dict(r)
+        try: x["output"]=json.loads(x.pop("output_json"))
+        except Exception: x["output"]=x.pop("output_json")
+        out.append(x)
+    return out
+
 def provider_summary(language, db_path=DB):
     con=connect(db_path)
     rows=con.execute("""SELECT task_type,COUNT(*) count,MAX(created_at) last_created_at
