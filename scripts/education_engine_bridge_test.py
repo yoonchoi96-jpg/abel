@@ -10,7 +10,7 @@ def main():
     plan=prepare_local("adaptive_learning_plan",{"candidates":[{"id":"r1","kind":"reading","priority":2}]})
     assert plan["count"]==1
     qa=prepare_local("hsks_exam_qa",{"questions":[{"number":1,"part":"listening","stem":"x","options":["A a","B b","C c","D d"],"answer":"A"}],"expected_total":1})
-    assert qa["engine"]=="Abel HSK Mock-Exam Evaluation Engine"
+    assert qa["schema_version"] == "abel.hsk.evaluation.v1"
     assert not local_available("translation")
     assert prepare_local("translation",{"text":"x"})["execution"]=="provider_required"
     print("education_engine_bridge_test: PASS")
