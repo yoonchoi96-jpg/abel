@@ -14,11 +14,13 @@ except ModuleNotFoundError:
     from scripts.gemini_tts_renderer import render_gemini_tts
 
 try:
-    from hsk_evaluation_engine import build_llm_review_prompt, evaluate_exam, finalize_review
+    from hsk_evaluation_engine import finalize_review
+    from hsk30_evaluation_engine import build_hsk30_llm_review_prompt, evaluate_hsk30_level6
     from writing_correction_engine import make_correction_envelope, validate_correction
     from multilingual_writing_engine import make_envelope as make_multilingual_envelope, validate_result as validate_multilingual_result
 except ModuleNotFoundError:
-    from scripts.hsk_evaluation_engine import build_llm_review_prompt, evaluate_exam, finalize_review
+    from scripts.hsk_evaluation_engine import finalize_review
+    from scripts.hsk30_evaluation_engine import build_hsk30_llm_review_prompt, evaluate_hsk30_level6
     from scripts.writing_correction_engine import make_correction_envelope, validate_correction
     from scripts.multilingual_writing_engine import make_envelope as make_multilingual_envelope, validate_result as validate_multilingual_result
 
@@ -360,12 +362,20 @@ def evaluate_hsk_content(
         except (json.JSONDecodeError, ValueError) as exc:
             return {"status": "error", "message": f"expected_distribution_json is invalid: {exc}"}
 
-    report = evaluate_exam(
+    # Production HSK QA target: HSK 3.0 Level 6.
+    # Full written mocks use 82 tasks: 1-40 listening, 41-80 reading, 81-82 writing.
+    if expected_total not in (0, 82):
+        return {
+            "status": "error",
+            "message": "HSK 3.0 Level 6 QA requires expected_total=82 (or omit it). Legacy 101-question HSK 2.0 layout is not supported by this production tool.",
+        }
+
+    report = evaluate_hsk30_level6(
         questions,
-        expected_total=expected_total or None,
+        expected_total=82,
         expected_answer_distribution=expected_distribution,
     )
-    report["semantic_review_prompt"] = build_llm_review_prompt(
+    report["semantic_review_prompt"] = build_hsk30_llm_review_prompt(
         questions,
         transcript=transcript,
         reference_facts=reference_facts,
