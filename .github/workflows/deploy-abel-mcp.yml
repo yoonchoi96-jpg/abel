@@ -29,6 +29,16 @@ jobs:
       - name: Checkout Abel
         uses: actions/checkout@v4
 
+      - name: Check Google Cloud credentials
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GCP_SA_KEY" ]; then
+            echo "::error::GitHub secret GCP_SA_KEY is missing or empty."
+            exit 1
+          fi
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
