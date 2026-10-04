@@ -20,5 +20,5 @@ with tempfile.TemporaryDirectory() as t:
     assert s["practice_errors"][0]["count"]==1
     states=connect(db).execute("SELECT question_id,correct_count,wrong_count FROM review_states ORDER BY question_id").fetchall()
     assert [(r["question_id"],r["correct_count"],r["wrong_count"]) for r in states] == [("q1",0,1),("q2",1,0),("q3",0,1)]
-    assert len(due_items("zh-CN",db,now="2026-01-01T00:00:00+00:00")) == 2
+    assert len(due_items("zh-CN",db,now="2026-10-04T00:00:00+00:00")) == 2
 print("learning_session_test: OK")
