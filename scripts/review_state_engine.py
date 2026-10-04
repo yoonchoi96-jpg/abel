@@ -40,7 +40,7 @@ def apply_result(language, question_id, resource_id, correct, *, kind=None, leve
         cc=int(row["consecutive_correct"]); cw=int(row["consecutive_wrong"]); interval=float(row["interval_days"])
         if correct:
             cc+=1; cw=0
-            interval={0:1.0,1:2.0,2:4.0,3:7.0}.get(cc-1,min(30.0,max(1.0,interval*2.0)))
+            interval={0:2.0,1:2.0,2:4.0,3:7.0}.get(cc-1,min(30.0,max(1.0,interval*2.0)))
         else:
             cw+=1; cc=0; interval=0.0
         next_at=at+timedelta(days=interval)
