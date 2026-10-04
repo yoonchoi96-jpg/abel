@@ -82,19 +82,39 @@ async def main(url: str, call_tool: bool = False):
 
                 if call_tool:
                     print("\nCALLING generate_lesson_audio...")
-                    result = await session.call_tool(
+                    audio_result = await session.call_tool(
                         "generate_lesson_audio",
                         {
-                            "text": "你好，这是 Abel MCP 的实际工具调用测试。",
+                            "text": "你好，这是 Abel MCP 的实际 Gemini TTS 工具调用测试。",
                             "title": "Abel MCP Smoke Test",
                             "level": "HSK6",
                             "topic": "MCP smoke test",
                         },
                     )
-                    print("TOOL RESULT:", result)
-                    if getattr(result, "is_error", False):
+                    print("TOOL RESULT:", audio_result)
+                    if getattr(audio_result, "is_error", False):
                         raise SystemExit("FAIL: generate_lesson_audio returned an MCP tool error.")
-                    print("PASS: generate_lesson_audio executed successfully.")
+                    if not audio_result.content or not getattr(audio_result.content[0], "text", ""):
+                        raise SystemExit("FAIL: generate_lesson_audio returned no structured payload.")
+                    audio_payload = json.loads(audio_result.content[0].text)
+                    if audio_payload.get("status") != "success":
+                        raise SystemExit(
+                            "FAIL: generate_lesson_audio status was "
+                            + str(audio_payload.get("status"))
+                            + ": "
+                            + str(audio_payload.get("message", ""))
+                        )
+                    if audio_payload.get("provider") != "gemini":
+                        raise SystemExit(
+                            "FAIL: generate_lesson_audio provider was "
+                            + str(audio_payload.get("provider"))
+                        )
+                    if not audio_payload.get("fileId") or not audio_payload.get("fileUrl"):
+                        raise SystemExit("FAIL: Gemini TTS succeeded but Drive file metadata is missing.")
+                    print(
+                        "PASS: real Gemini TTS generated an MP3 and saved it to Drive. "
+                        f"fileId={audio_payload['fileId']} provider={audio_payload['provider']}"
+                    )
 
 
 if __name__ == "__main__":
