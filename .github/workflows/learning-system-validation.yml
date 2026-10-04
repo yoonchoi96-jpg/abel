@@ -37,4 +37,6 @@ jobs:
           PYTHONPATH=. python scripts/hsk_mock_builder_test.py
           PYTHONPATH=. python scripts/hsk_scoring_test.py
           PYTHONPATH=. python scripts/education_router_test.py
+          PYTHONPATH=. python scripts/education_executor_test.py
+          PYTHONPATH=. python scripts/education_provider_adapters_test.py
           PYTHONPATH=. python scripts/learning_pipeline_test.py
