@@ -5,7 +5,7 @@ import argparse, json
 from datetime import datetime, timezone
 from pathlib import Path
 from writing_history import connect, error_summary, vocabulary_summary
-from learning_session import summary as session_summary, provider_summary
+from learning_session import summary as session_summary, provider_summary, provider_recent
 
 def build_snapshot(language: str, db_path: str | Path) -> dict:
     conn = connect(db_path)
@@ -26,6 +26,7 @@ def build_snapshot(language: str, db_path: str | Path) -> dict:
 
     sessions = session_summary(language, db_path)
     providers = provider_summary(language, db_path)
+    provider_history = provider_recent(language, db_path, limit=20)
     writing_errors = error_summary(language=language, db_path=db_path)
     practice_errors = sessions.get("practice_errors", [])
     # Keep writing-history taxonomy intact while exposing practice recurrence.
@@ -43,6 +44,7 @@ def build_snapshot(language: str, db_path: str | Path) -> dict:
         "stats": dict(stats),
         "learning_sessions": sessions,
         "provider_learning": providers,
+        "recent_provider_results": provider_history,
         "recurring_errors": recurring,
         "problematic_vocabulary": vocabulary_summary(language=language, db_path=db_path),
         "recent_corrections": [dict(x) for x in recent],
