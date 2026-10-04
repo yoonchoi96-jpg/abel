@@ -39,6 +39,7 @@ def test_queue_is_source_backed_and_deterministic(tmp_path):
     assert a["items"] == b["items"]
     assert a["items"][0]["question_id"] == "q2"
     assert a["items"][0]["wrong_count"] == 2
+    assert all("review_reason" in x for x in a["items"])
     assert all(x["language"] if "language" in x else True for x in a["items"])
 
 
