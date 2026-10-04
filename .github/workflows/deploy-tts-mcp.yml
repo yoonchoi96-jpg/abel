@@ -1,0 +1,50 @@
+name: Deploy Abel MCP on TTS changes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - "requirements-mcp.txt"
+      - "scripts/abel_mcp_server.py"
+      - "scripts/gemini_tts_renderer.py"
+      - "scripts/audio_style_profiles.py"
+      - "scripts/deploy_abel_mcp.sh"
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Select project
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          test -n "$GCP_SA_KEY"
+          PROJECT_ID="$(python3 - <<'PY'
+import json, os
+print(json.loads(os.environ["GCP_SA_KEY"]).get("project_id", ""))
+PY
+)"
+          test -n "$PROJECT_ID"
+          gcloud config set project "$PROJECT_ID"
+      - name: Deploy
+        env:
+          MCP_AUTH_TOKEN: ${{ secrets.MCP_AUTH_TOKEN }}
+        run: |
+          chmod +x scripts/deploy_abel_mcp.sh
+          ./scripts/deploy_abel_mcp.sh
+      - name: Verify
+        env:
+          MCP_AUTH_TOKEN: ${{ secrets.MCP_AUTH_TOKEN }}
+        run: |
+          URL="$(gcloud run services describe abel-mcp --region asia-northeast3 --format='value(status.url)')"
+          python3 -m pip install --quiet "mcp>=1.9,<2" "httpx>=0.28,<1"
+          python3 scripts/mcp_smoke_test.py "$URL/mcp"
