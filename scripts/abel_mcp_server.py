@@ -1,17 +1,20 @@
 import base64
 import json
+from datetime import datetime
+from zoneinfo import ZoneInfo
 import os
 import tempfile
 from pathlib import Path
-import requests
 from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from fastmcp.server.auth import StaticTokenVerifier
 try:
     from gemini_tts_renderer import render_gemini_tts
+    from drive_audio_uploader import DrivePublisher
 except ModuleNotFoundError:
     from scripts.gemini_tts_renderer import render_gemini_tts
+    from scripts.drive_audio_uploader import DrivePublisher
 
 try:
     from hsk_evaluation_engine import finalize_review
@@ -24,7 +27,6 @@ except ModuleNotFoundError:
     from scripts.writing_correction_engine import make_correction_envelope, validate_correction
     from scripts.multilingual_writing_engine import make_envelope as make_multilingual_envelope, validate_result as validate_multilingual_result
 
-APPS_SCRIPT_URL = os.environ["ABEL_APPS_SCRIPT_URL"]
 MCP_AUTH_TOKEN = os.environ.get("MCP_AUTH_TOKEN", "")
 MAX_LESSON_CHARS = 20000
 MAX_QUESTIONS_JSON_CHARS = 2_000_000
@@ -185,12 +187,11 @@ def generate_lesson_audio(
     level: str = "HSK6",
     topic: str = "",
 ) -> dict:
-    """Generate a Chinese listening lesson MP3 with Gemini TTS and save it to Abel Google Drive.
+    """Generate a Chinese listening lesson MP3 with Gemini TTS and save it directly to Google Drive.
 
-    Production backend is hard-pinned to Gemini TTS. Legacy Google Cloud TTS is not
-    used by this MCP tool; Apps Script is storage-only for the finished MP3.
+    Production audio is Gemini TTS only. Apps Script and Google Cloud TTS are not
+    used by this MCP tool.
     """
-
     text = (text or "").strip()
     if not text:
         return {"status": "error", "message": "Lesson text is required."}
@@ -200,103 +201,43 @@ def generate_lesson_audio(
             "message": f"Lesson text exceeds the {MAX_LESSON_CHARS}-character limit.",
         }
 
-    # Production safety: this MCP tool is permanently Gemini-backed.
-    # Do not allow a stale Cloud Run environment variable to route audio back to
-    # the legacy Google Cloud TTS endpoint.
-    backend = "gemini"
+    current = datetime.now(ZoneInfo("Asia/Seoul"))
+    date = current.strftime("%Y-%m-%d")
+    time = current.strftime("%H%M%S")
 
-    if backend == "google_cloud":
-        payload = {
-            "action": "generate-lesson-audio",
-            "text": text,
-            "title": title,
-            "level": level,
-            "topic": topic,
-        }
-    elif backend == "gemini":
-        with tempfile.TemporaryDirectory(prefix="abel-mcp-tts-") as tmp:
-            mp3_path = Path(tmp) / "lesson.mp3"
-            try:
-                render_gemini_tts(
-                    text,
-                    mp3_path,
-                    voice=os.getenv("GEMINI_TTS_VOICE", "Kore"),
-                    model=os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-tts"),
-                )
-            except Exception as exc:
-                return {
-                    "status": "error",
-                    "stage": "gemini_tts",
-                    "message": f"Gemini TTS failed: {exc}",
-                }
-
-            try:
-                audio_b64 = base64.b64encode(mp3_path.read_bytes()).decode("ascii")
-            except OSError as exc:
-                return {
-                    "status": "error",
-                    "stage": "mp3_read",
-                    "message": f"Generated MP3 could not be read: {exc}",
-                }
-
-            payload = {
-                "action": "save-gemini-lesson-audio",
-                "audioBase64": audio_b64,
-                "mimeType": "audio/mpeg",
-                "fileName": "",
-                "text": text,
-                "title": title,
-                "level": level,
-                "topic": topic,
-            }
-    else:
-        return {
-            "status": "error",
-            "message": f"Unknown TTS_BACKEND: {backend}. Use gemini or google_cloud.",
-        }
-
-    try:
-        response = requests.post(
-            APPS_SCRIPT_URL,
-            json=payload,
-            headers={"Content-Type": "application/json"},
-            allow_redirects=False,
-            timeout=180,
-        )
-    except requests.RequestException as exc:
-        return {
-            "status": "error",
-            "stage": "apps_script_request",
-            "message": f"Apps Script request failed: {exc}",
-        }
-
-    location = response.headers.get("Location")
-
-    if response.status_code in (301, 302, 303, 307, 308) and location:
+    with tempfile.TemporaryDirectory(prefix="abel-mcp-tts-") as tmp:
+        mp3_path = Path(tmp) / f"lesson_{date}_{time}.mp3"
         try:
-            response = requests.get(location, timeout=180)
-        except requests.RequestException as exc:
+            render_gemini_tts(
+                text,
+                mp3_path,
+                voice=os.getenv("GEMINI_TTS_VOICE", "Kore"),
+                model=os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-tts"),
+            )
+        except Exception as exc:
             return {
                 "status": "error",
-                "stage": "apps_script_redirect",
-                "message": f"Apps Script redirect request failed: {exc}",
+                "stage": "gemini_tts",
+                "message": f"Gemini TTS failed: {exc}",
             }
 
-    if response.status_code != 200:
-        return {
-            "status": "error",
-            "http_status": response.status_code,
-            "message": response.text[:3000],
-        }
-
-    try:
-        return response.json()
-    except ValueError:
-        return {
-            "status": "error",
-            "message": "Apps Script returned non-JSON data.",
-            "raw_response": response.text[:3000],
-        }
+        try:
+            publisher = DrivePublisher(os.getenv("ABEL_DRIVE_FOLDER_ID", ""))
+            return publisher.publish_lesson(
+                mp3_path,
+                date=date,
+                time=time,
+                title=title,
+                level=level,
+                topic=topic,
+                text=text,
+            )
+        except Exception as exc:
+            return {
+                "status": "error",
+                "stage": "google_drive",
+                "message": f"Google Drive upload failed: {exc}",
+            }
 
 
 @mcp.tool()
