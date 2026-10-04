@@ -24,40 +24,26 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
 
     steps:
       - name: Checkout Abel
         uses: actions/checkout@v4
 
-      - name: Check Google Cloud credentials
-        env:
-          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
-        run: |
-          set -euo pipefail
-          if [ -z "$GCP_SA_KEY" ]; then
-            echo "::error::GitHub secret GCP_SA_KEY is missing or empty."
-            exit 1
-          fi
-
-      - name: Authenticate to Google Cloud
+      - name: Authenticate to Google Cloud with Workload Identity Federation
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: projects/382528581049/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: abel-github-deploy@gen-lang-client-0543639616.iam.gserviceaccount.com
 
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Google Cloud project
-        env:
-          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
         run: |
           set -euo pipefail
-          test -n "$GCP_SA_KEY"
-          command -v jq >/dev/null
-          PROJECT_ID="$(printf '%s' "$GCP_SA_KEY" | jq -r '.project_id // empty')"
-          test -n "$PROJECT_ID"
-          gcloud config set project "$PROJECT_ID"
-          echo "Using project: $PROJECT_ID"
+          gcloud config set project "gen-lang-client-0543639616"
+          echo "Using project: gen-lang-client-0543639616"
 
       - name: Deploy Abel MCP to Cloud Run
         env:
@@ -74,7 +60,7 @@ jobs:
           MCP_AUTH_TOKEN: ${{ secrets.MCP_AUTH_TOKEN }}
         run: |
           set -euo pipefail
-          URL="$(gcloud run services describe abel-mcp             --region asia-northeast3             --format='value(status.url)')"
+          URL="$(gcloud run services describe abel-mcp --region asia-northeast3 --format='value(status.url)')"
           test -n "$URL"
           python3 -m pip install --quiet "mcp>=1.9,<2" "httpx>=0.28,<1"
           python3 scripts/mcp_smoke_test.py "$URL/mcp"
