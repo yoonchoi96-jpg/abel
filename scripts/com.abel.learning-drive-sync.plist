@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>Label</key><string>com.abel.learning-drive-sync</string>
+<key>ProgramArguments</key><array><string>/bin/bash</string><string>/ABSOLUTE/PATH/TO/abel/scripts/abel_learning_sync_once.sh</string></array>
+<key>WorkingDirectory</key><string>/ABSOLUTE/PATH/TO/abel</string>
+<key>EnvironmentVariables</key><dict><key>ABEL_DRIVE_DIR</key><string>/ABSOLUTE/PATH/TO/Google Drive/Abel Learning</string></dict>
+<key>StartCalendarInterval</key><array>
+<dict><key>Hour</key><integer>5</integer><key>Minute</key><integer>30</integer></dict>
+<dict><key>Hour</key><integer>11</integer><key>Minute</key><integer>30</integer></dict>
+<dict><key>Hour</key><integer>17</integer><key>Minute</key><integer>30</integer></dict>
+<dict><key>Hour</key><integer>23</integer><key>Minute</key><integer>30</integer></dict>
+</array>
+<key>RunAtLoad</key><false/>
+<key>StandardOutPath</key><string>/tmp/abel-learning-drive-sync.log</string>
+<key>StandardErrorPath</key><string>/tmp/abel-learning-drive-sync.err</string>
+</dict></plist>
