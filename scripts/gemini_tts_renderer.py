@@ -73,9 +73,7 @@ def render_gemini_tts(
         model=model_name,
         contents=[types.Content(
             role="user",
-            parts=[types.Part.from_text(text=script, speech_metadata={
-                "style": style_text,
-            })],
+            parts=[types.Part.from_text(text=f"{style_text}\n\n{script}")],
         )],
         config=types.GenerateContentConfig(
             response_modalities=["AUDIO"],
