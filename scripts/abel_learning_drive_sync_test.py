@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import json, tempfile
 from pathlib import Path
-from scripts.abel_learning_drive_sync import sync
+from abel_learning_drive_sync import sync
 
 def test_sync():
     with tempfile.TemporaryDirectory() as tmp:
