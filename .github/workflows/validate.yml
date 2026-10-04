@@ -32,7 +32,10 @@ jobs:
           print("Production MCP server import + tool registration: PASS")
           PY
       - name: Run tests
-        run: pytest -q
+        run: |
+          pytest -q
+          python scripts/abel_learning_drive_sync_test.py
+          python scripts/learning_drive_publisher_test.py
 
       - name: Start local production MCP server
         env:
@@ -42,9 +45,7 @@ jobs:
           python scripts/abel_mcp_server.py > /tmp/abel-mcp.log 2>&1 &
           echo $! > /tmp/abel-mcp.pid
           for _ in $(seq 1 20); do
-            if curl -fsS http://127.0.0.1:8080/ | grep -q '"status":"online"'; then
-              break
-            fi
+            if curl -fsS http://127.0.0.1:8080/ | grep -q '"status":"online"'; then break; fi
             sleep 0.5
           done
           curl -fsS http://127.0.0.1:8080/ | grep -q '"status":"online"'
@@ -60,9 +61,7 @@ jobs:
           python scripts/abel_mcp_server.py > /tmp/abel-mcp-auth.log 2>&1 &
           echo $! > /tmp/abel-mcp-auth.pid
           for _ in $(seq 1 20); do
-            if curl -fsS http://127.0.0.1:8081/ | grep -q '"status":"online"'; then
-              break
-            fi
+            if curl -fsS http://127.0.0.1:8081/ | grep -q '"status":"online"'; then break; fi
             sleep 0.5
           done
           curl -fsS http://127.0.0.1:8081/ | grep -q '"status":"online"'
@@ -80,9 +79,5 @@ jobs:
       - name: Stop local production MCP servers
         if: always()
         run: |
-          if [ -f /tmp/abel-mcp.pid ]; then
-            kill "$(cat /tmp/abel-mcp.pid)" || true
-          fi
-          if [ -f /tmp/abel-mcp-auth.pid ]; then
-            kill "$(cat /tmp/abel-mcp-auth.pid)" || true
-          fi
+          if [ -f /tmp/abel-mcp.pid ]; then kill "$(cat /tmp/abel-mcp.pid)" || true; fi
+          if [ -f /tmp/abel-mcp-auth.pid ]; then kill "$(cat /tmp/abel-mcp-auth.pid)" || true; fi
