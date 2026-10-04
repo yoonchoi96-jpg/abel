@@ -47,5 +47,4 @@ if __name__=="__main__":
     p.add_argument("--prompt-version",default="1"); p.add_argument("--force-model"); p.add_argument("--out",required=True)
     a=p.parse_args(); payload=json.loads(Path(a.payload).read_text(encoding="utf-8"))
     out=route(a.task_type,payload,prompt_version=a.prompt_version,force_model=a.force_model)
-    Path(a.out).write_text(json.dumps(out,ensure_ascii=False,indent=2)+"
-",encoding="utf-8"); print(a.out)
+    Path(a.out).write_text(json.dumps(out,ensure_ascii=False,indent=2)+"\\n",encoding="utf-8"); print(a.out)
