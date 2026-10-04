@@ -1,0 +1,10 @@
+{
+  "schema_version": "abel.language-config.v1",
+  "language": "ja-JP",
+  "name": "Japanese",
+  "status": "planned",
+  "learning_scales": ["JLPT"],
+  "content_types": ["vocabulary", "grammar", "expressions", "reading", "listening", "writing", "speaking", "translation", "culture"],
+  "tts": {"model_env": "GEMINI_TTS_MODEL", "voice_env": "GEMINI_TTS_VOICE"},
+  "storage": {"drive_language_folder": "ja-JP", "audio_language_folder": "ja-JP"}
+}
