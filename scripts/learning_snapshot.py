@@ -4,11 +4,10 @@ from __future__ import annotations
 import argparse, json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 from writing_history import connect, error_summary, vocabulary_summary
 from learning_session import summary as session_summary
 
-def build_snapshot(language: str, db_path: str | Path) -> dict[str, Any]:
+def build_snapshot(language: str, db_path: str | Path) -> dict:
     conn = connect(db_path)
     try:
         stats = conn.execute(
@@ -24,14 +23,25 @@ def build_snapshot(language: str, db_path: str | Path) -> dict[str, Any]:
         ).fetchall()
     finally:
         conn.close()
+
+    sessions = session_summary(language, db_path)
+    writing_errors = error_summary(language=language, db_path=db_path)
+    practice_errors = sessions.get("practice_errors", [])
+    # Keep writing-history taxonomy intact while exposing practice recurrence.
+    recurring = [
+        {"issue_type": x["error_type"], "severity": "practice", "count": x["count"],
+         "questions": x["questions"]}
+        for x in practice_errors if x.get("error_type")
+    ] + writing_errors
+
     return {
-        "schema_version": "abel.learning.snapshot.v1",
+        "schema_version": "abel.learning.snapshot.v2",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "language": language,
         "source": "Abel local learning history",
         "stats": dict(stats),
-        "learning_sessions": session_summary(language, db_path),
-        "recurring_errors": error_summary(language=language, db_path=db_path),
+        "learning_sessions": sessions,
+        "recurring_errors": recurring,
         "problematic_vocabulary": vocabulary_summary(language=language, db_path=db_path),
         "recent_corrections": [dict(x) for x in recent],
         "gemini_instructions": {
@@ -42,7 +52,7 @@ def build_snapshot(language: str, db_path: str | Path) -> dict[str, Any]:
         },
     }
 
-def render_markdown(snapshot: dict[str, Any]) -> str:
+def render_markdown(snapshot: dict) -> str:
     s = snapshot["stats"]
     lines = [
         "# Abel Learning Snapshot", "",
@@ -58,8 +68,9 @@ def render_markdown(snapshot: dict[str, Any]) -> str:
         "", "## Recurring errors",
     ]
     if snapshot["recurring_errors"]:
-        for x in snapshot["recurring_errors"][:20]:
-            lines.append(f"- {x['issue_type']} / {x['severity']}: {x['count']}")
+        for x in snapshot["recurring_errors"][:30]:
+            suffix = f" / {x.get('questions')} questions" if x.get("questions") is not None else ""
+            lines.append(f"- {x.get('issue_type')} / {x.get('severity')}: {x.get('count')}{suffix}")
     else:
         lines.append("- No recorded errors yet.")
     lines += ["", "## Problematic vocabulary"]
@@ -98,11 +109,15 @@ def main() -> None:
     args = p.parse_args()
     conn = connect(args.db)
     try:
-        langs = [r[0] for r in conn.execute(
-            "SELECT DISTINCT language FROM writing_corrections ORDER BY language"
-        )]
+        langs = {r[0] for r in conn.execute(
+            "SELECT language FROM writing_corrections WHERE language IS NOT NULL"
+        )}
+        langs.update(r[0] for r in conn.execute(
+            "SELECT language FROM learning_sessions WHERE language IS NOT NULL"
+        ))
     finally:
         conn.close()
+    langs = sorted(langs)
     if args.language:
         langs = [args.language]
     elif not args.all:
@@ -117,7 +132,7 @@ def main() -> None:
         )
         (out / f"{stem}.md").write_text(render_markdown(snap), encoding="utf-8")
     index = {
-        "schema_version": "abel.learning.index.v1",
+        "schema_version": "abel.learning.index.v2",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "languages": langs,
         "files": [f"{x}.md" for x in langs] + [f"{x}.json" for x in langs],
