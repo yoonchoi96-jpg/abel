@@ -22,7 +22,9 @@ def _num(v:Any)->int|None:
     return None
 def _text(v:Any)->str: return str(v or "").strip()
 def _chinese_len(v:Any)->int: return len(re.findall(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]",_text(v)))
-def _option_text(v:Any)->str:\n    text=_text(v)\n    return re.sub(r"^\\s*[【\\[]?[ABCD][】\\]]?[.、:：)）]?\\s*", "", text, count=1, flags=re.I)
+def _option_text(v:Any)->str:
+    text = _text(v)
+    return re.sub(r"^\s*[【\[]?[ABCD][】\]]?[.、:：)）]?\s*", "", text, count=1, flags=re.I)
 
 def evaluate_hsk30_level6(questions:list[dict[str,Any]], *, expected_total:int|None=82, expected_answer_distribution:dict[str,int]|None=None)->dict[str,Any]:
     findings=[]; nums=[_num(q.get("number")) for q in questions]; valid=[n for n in nums if n is not None]
