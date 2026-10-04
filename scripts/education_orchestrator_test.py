@@ -12,6 +12,6 @@ def main():
     with tempfile.TemporaryDirectory() as t:
         out=run(route,{"text":"x"},fake,db_path=t+"/db.sqlite",allow_api_call=True)
         assert out["status"]=="executed"
-        assert out["result"]["result"]["response"]["text"]=="ok"
+        assert out["result"]["response"]["text"]=="ok"
     print("education_orchestrator_test: PASS")
 if __name__=="__main__": main()
