@@ -17,7 +17,7 @@ def test_build_payload():
             encoding="utf-8",
         )
         payload = build_payload(root)
-        assert payload["schema_version"] == "abel.learning.drive-payload.v1"
+        assert payload["schema_version"] == "abel.learning.drive-payload.v2"
         assert payload["snapshots"]["zh-CN"]["stats"]["corrections"] == 2
 
 
