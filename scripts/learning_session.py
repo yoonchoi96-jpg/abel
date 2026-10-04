@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse, json, sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from review_state_engine import apply_result
+from review_state_engine import apply_result, connect as connect_review
 
 DB = Path("data/abel_learning.db")
 SCHEMA_VERSION = 3
