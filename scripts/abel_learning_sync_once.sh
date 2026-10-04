@@ -6,5 +6,5 @@ PYTHON="${PYTHON:-python3}"
 DB="${ABEL_LEARNING_DB:-data/abel_learning.db}"
 SNAPSHOTS="${ABEL_SNAPSHOT_DIR:-data/learning_snapshots}"
 
-"$PYTHON" scripts/learning_snapshot.py --all
+"$PYTHON" scripts/learning_snapshot.py --all --db "$DB"
 "$PYTHON" scripts/abel_learning_drive_sync.py --snapshots "$SNAPSHOTS"
