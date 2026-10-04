@@ -6,6 +6,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 from google.auth.transport.requests import AuthorizedSession
 from google.oauth2 import service_account
+from google.auth import default as google_auth_default
 
 DRIVE_SCOPE = "https://www.googleapis.com/auth/drive"
 FOLDER_MIME = "application/vnd.google-apps.folder"
@@ -20,11 +21,13 @@ def credentials():
             json.loads(raw), scopes=[DRIVE_SCOPE]
         )
     path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
-    if not path:
-        raise RuntimeError("GCP_SA_KEY or GOOGLE_APPLICATION_CREDENTIALS is required.")
-    return service_account.Credentials.from_service_account_file(
-        path, scopes=[DRIVE_SCOPE]
-    )
+    if path:
+        return service_account.Credentials.from_service_account_file(
+            path, scopes=[DRIVE_SCOPE]
+        )
+    # Cloud Run / GitHub Actions can provide Application Default Credentials.
+    creds, _ = google_auth_default(scopes=[DRIVE_SCOPE])
+    return creds
 
 class DrivePublisher:
     def __init__(self, root_folder_id: str):
@@ -126,6 +129,9 @@ class DrivePublisher:
         record = {
             "status": "success",
             "provider": "gemini",
+            "language": "zh-CN",
+            "model": os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-tts"),
+            "voice": os.getenv("GEMINI_TTS_VOICE", "Kore"),
             "createdAt": datetime.now(KST).isoformat(),
             "session": {"date": date, "time": time},
             "lesson": {"text": text, "title": title, "level": level, "topic": topic},
@@ -154,6 +160,9 @@ class DrivePublisher:
         return {
             "status": "success",
             "provider": "gemini",
+            "language": "zh-CN",
+            "model": os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-tts"),
+            "voice": os.getenv("GEMINI_TTS_VOICE", "Kore"),
             "cached": False,
             "fileId": audio.get("id"),
             "fileUrl": record["audio"]["fileUrl"],
