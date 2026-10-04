@@ -34,8 +34,15 @@ def extract(events: list[dict[str, Any]], language: str) -> dict[str, Any]:
     errors = Counter()
     vocab = Counter()
     outcomes = Counter()
-    seen = set()
+    error_tasks = {}
+    error_first = {}
+    error_last = {}
+    vocab_tasks = {}
+    vocab_first = {}
+    vocab_last = {}
     for event in events:
+        task_type = str(event.get("task_type") or "").strip()
+        created_at = str(event.get("created_at") or "").strip()
         root = event.get("output", event)
         for node in _walk(root):
             for issue in node.get("issues", []) if isinstance(node.get("issues"), list) else []:
@@ -43,6 +50,11 @@ def extract(events: list[dict[str, Any]], language: str) -> dict[str, Any]:
                 key = str(issue.get("issue_type") or issue.get("error_type") or issue.get("type") or "").strip()
                 if key:
                     errors[key] += 1
+                    error_tasks.setdefault(key, Counter())
+                    if task_type: error_tasks[key][task_type] += 1
+                    if created_at:
+                        error_first[key] = min(created_at, error_first.get(key, created_at))
+                        error_last[key] = max(created_at, error_last.get(key, created_at))
             usage = node.get("vocabulary_usage")
             if isinstance(usage, list):
                 for item in usage:
@@ -50,17 +62,28 @@ def extract(events: list[dict[str, Any]], language: str) -> dict[str, Any]:
                     word = str(item.get("word") or "").strip()
                     status = str(item.get("status") or item.get("usage_status") or "").strip()
                     if word and status in {"incorrect", "awkward", "correct"}:
-                        vocab[(word, status)] += 1
+                        key = (word, status)
+                        vocab[key] += 1
+                        vocab_tasks.setdefault(key, Counter())
+                        if task_type: vocab_tasks[key][task_type] += 1
+                        if created_at:
+                            vocab_first[key] = min(created_at, vocab_first.get(key, created_at))
+                            vocab_last[key] = max(created_at, vocab_last.get(key, created_at))
             status = str(node.get("status") or "").strip()
             if status in {"success", "executed", "failed", "fallback"}:
                 outcomes[status] += 1
 
     error_items = [
-        {"type": k, "count": n, "memory_id": _fingerprint("error", k)}
+        {"type": k, "count": n, "task_types": dict(error_tasks.get(k, {})),
+         "first_seen": error_first.get(k), "last_seen": error_last.get(k),
+         "memory_id": _fingerprint("error", k)}
         for k, n in errors.most_common(MAX_ITEMS) if n >= MIN_RECURRING_COUNT
     ]
     vocab_items = [
-        {"word": w, "status": s, "count": n, "memory_id": _fingerprint("vocab", f"{w}|{s}")}
+        {"word": w, "status": s, "count": n,
+         "task_types": dict(vocab_tasks.get((w, s), {})),
+         "first_seen": vocab_first.get((w, s)), "last_seen": vocab_last.get((w, s)),
+         "memory_id": _fingerprint("vocab", f"{w}|{s}")}
         for (w, s), n in sorted(vocab.items(), key=lambda x: (-x[1], x[0])) if n >= MIN_RECURRING_COUNT
     ][:MAX_ITEMS]
     return {
@@ -111,4 +134,5 @@ if __name__ == "__main__":
     p=argparse.ArgumentParser()
     p.add_argument("--language", required=True)
     p.add_argument("--db", default="data/abel_learning.db")
-    print(json.dumps(extract_from_db(p.parse_args().language, p.parse_args().db), ensure_ascii=False, indent=2))
+    args = p.parse_args()
+    print(json.dumps(extract_from_db(args.language, args.db), ensure_ascii=False, indent=2))
