@@ -1,10 +1,17 @@
+import base64
 import json
 import os
+import tempfile
+from pathlib import Path
 import requests
 from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from fastmcp.server.auth import StaticTokenVerifier
+try:
+    from gemini_tts_renderer import render_gemini_tts
+except ModuleNotFoundError:
+    from scripts.gemini_tts_renderer import render_gemini_tts
 
 try:
     from hsk_evaluation_engine import build_llm_review_prompt, evaluate_exam, finalize_review
@@ -176,7 +183,11 @@ def generate_lesson_audio(
     level: str = "HSK6",
     topic: str = "",
 ) -> dict:
-    """Generate a Chinese listening lesson MP3 and save it to Abel Google Drive."""
+    """Generate a Chinese listening lesson MP3 and save it to Abel Google Drive.
+
+    Production default: Gemini TTS -> local MP3 conversion -> Apps Script storage.
+    Legacy Google Cloud TTS remains available only with TTS_BACKEND=google_cloud.
+    """
 
     text = (text or "").strip()
     if not text:
@@ -187,13 +198,57 @@ def generate_lesson_audio(
             "message": f"Lesson text exceeds the {MAX_LESSON_CHARS}-character limit.",
         }
 
-    payload = {
-        "action": "generate-lesson-audio",
-        "text": text,
-        "title": title,
-        "level": level,
-        "topic": topic,
-    }
+    backend = os.getenv("TTS_BACKEND", "gemini").strip().lower()
+
+    if backend == "google_cloud":
+        payload = {
+            "action": "generate-lesson-audio",
+            "text": text,
+            "title": title,
+            "level": level,
+            "topic": topic,
+        }
+    elif backend == "gemini":
+        with tempfile.TemporaryDirectory(prefix="abel-mcp-tts-") as tmp:
+            mp3_path = Path(tmp) / "lesson.mp3"
+            try:
+                render_gemini_tts(
+                    text,
+                    mp3_path,
+                    voice=os.getenv("GEMINI_TTS_VOICE", "Kore"),
+                    model=os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-tts"),
+                )
+            except Exception as exc:
+                return {
+                    "status": "error",
+                    "stage": "gemini_tts",
+                    "message": f"Gemini TTS failed: {exc}",
+                }
+
+            try:
+                audio_b64 = base64.b64encode(mp3_path.read_bytes()).decode("ascii")
+            except OSError as exc:
+                return {
+                    "status": "error",
+                    "stage": "mp3_read",
+                    "message": f"Generated MP3 could not be read: {exc}",
+                }
+
+            payload = {
+                "action": "save-gemini-lesson-audio",
+                "audioBase64": audio_b64,
+                "mimeType": "audio/mpeg",
+                "fileName": "",
+                "text": text,
+                "title": title,
+                "level": level,
+                "topic": topic,
+            }
+    else:
+        return {
+            "status": "error",
+            "message": f"Unknown TTS_BACKEND: {backend}. Use gemini or google_cloud.",
+        }
 
     try:
         response = requests.post(
@@ -201,7 +256,7 @@ def generate_lesson_audio(
             json=payload,
             headers={"Content-Type": "application/json"},
             allow_redirects=False,
-            timeout=120,
+            timeout=180,
         )
     except requests.RequestException as exc:
         return {
@@ -214,7 +269,7 @@ def generate_lesson_audio(
 
     if response.status_code in (301, 302, 303, 307, 308) and location:
         try:
-            response = requests.get(location, timeout=120)
+            response = requests.get(location, timeout=180)
         except requests.RequestException as exc:
             return {
                 "status": "error",
