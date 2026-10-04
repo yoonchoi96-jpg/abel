@@ -40,4 +40,5 @@ jobs:
           PYTHONPATH=. python scripts/education_executor_test.py
           PYTHONPATH=. python scripts/education_provider_adapters_test.py
           PYTHONPATH=. python scripts/education_provider_http_test.py
+          PYTHONPATH=. python scripts/education_provider_payloads_test.py
           PYTHONPATH=. python scripts/learning_pipeline_test.py
