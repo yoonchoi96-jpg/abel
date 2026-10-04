@@ -6,6 +6,11 @@ from education_task_adapters import TASKS
 from multilingual_writing_engine import make_envelope as writing_envelope
 from adaptive_learning_plan import build_plan
 from hsk_evaluation_engine import evaluate_exam
+from listening_practice_engine import score as score_listening
+from reading_practice_engine import score as score_reading
+from writing_practice_engine import prepare as prepare_writing
+from mock_test_engine import aggregate as aggregate_mock
+from error_review_engine import build_review
 
 def prepare_local(task_type: str, payload: dict[str, Any]) -> dict[str, Any]:
     if task_type not in TASKS:
@@ -28,7 +33,20 @@ def prepare_local(task_type: str, payload: dict[str, Any]) -> dict[str, Any]:
             expected_answer_distribution=payload.get("expected_answer_distribution"),
             expected_total=payload.get("expected_total"),
         )
+    if task_type == "listening_practice":
+        return score_listening(payload["resource"], payload.get("answers", {}))
+    if task_type == "reading_practice":
+        return score_reading(payload["resource"], payload.get("answers", {}))
+    if task_type == "writing_practice":
+        return prepare_writing(payload["resource"])
+    if task_type == "mock_test":
+        return aggregate_mock(payload["mock"], payload["units"], payload.get("results", []))
+    if task_type == "error_review":
+        return build_review(payload.get("results", []))
     return {"task_type":task_type,"payload":payload,"execution":"provider_required"}
 
 def local_available(task_type: str) -> bool:
-    return task_type in {"chinese_writing_correction","adaptive_learning_plan","hsks_exam_qa"}
+    return task_type in {
+        "chinese_writing_correction","adaptive_learning_plan","hsks_exam_qa",
+        "listening_practice","reading_practice","writing_practice","mock_test","error_review",
+    }
