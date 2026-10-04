@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Abel Education Router: deterministic task-to-model routing with cache metadata.
-
-Abel remains the source of truth. This module only decides which model family
-should handle an educational task; it does not call model APIs.
-"""
+"""Abel Education Router: deterministic task-to-model routing with cache metadata."""
 from __future__ import annotations
 import argparse, hashlib, json
 from pathlib import Path
@@ -22,6 +18,11 @@ ROUTES={
  "naver_dictionary_collection":{"primary":"naver_ai","fallback":[],"cache":True,"batchable":True},
  "translation":{"primary":"deepseek","fallback":["gpt","gemini"],"cache":True,"batchable":True},
  "speaking_feedback":{"primary":"gpt","fallback":["gemini","claude"],"cache":True,"batchable":False},
+ "listening_practice":{"primary":"gemini","fallback":["gpt","claude"],"cache":True,"batchable":True},
+ "reading_practice":{"primary":"gemini","fallback":["gpt","claude"],"cache":True,"batchable":True},
+ "writing_practice":{"primary":"gemini","fallback":["claude","gpt"],"cache":True,"batchable":True},
+ "mock_test":{"primary":"gpt","fallback":["gemini","claude"],"cache":True,"batchable":False},
+ "error_review":{"primary":"gpt","fallback":["gemini","claude"],"cache":True,"batchable":True},
 }
 
 def cache_key(task_type:str,payload:dict[str,Any],prompt_version="1"):
@@ -35,26 +36,16 @@ def route(task_type:str,payload:dict[str,Any],*,prompt_version="1",force_model=N
     spec=ROUTES[task_type]
     models=[force_model] if force_model else [spec["primary"],*spec["fallback"]]
     return {
-      "schema_version":SCHEMA,
-      "task_type":task_type,
-      "model_chain":models,
-      "primary_model":models[0],
-      "cache_enabled":spec["cache"],
-      "batchable":spec["batchable"],
-      "cache_key":cache_key(task_type,payload,prompt_version),
-      "source_of_truth":"Abel",
+      "schema_version":SCHEMA,"task_type":task_type,"model_chain":models,
+      "primary_model":models[0],"cache_enabled":spec["cache"],"batchable":spec["batchable"],
+      "cache_key":cache_key(task_type,payload,prompt_version),"source_of_truth":"Abel",
       "api_call_policy":"cache_hit_first; call only on miss; retry failed stage only",
     }
 
 if __name__=="__main__":
-    p=argparse.ArgumentParser()
-    p.add_argument("task_type")
-    p.add_argument("payload")
-    p.add_argument("--prompt-version",default="1")
-    p.add_argument("--force-model")
-    p.add_argument("--out",required=True)
-    a=p.parse_args()
-    payload=json.loads(Path(a.payload).read_text(encoding="utf-8"))
+    p=argparse.ArgumentParser(); p.add_argument("task_type"); p.add_argument("payload")
+    p.add_argument("--prompt-version",default="1"); p.add_argument("--force-model"); p.add_argument("--out",required=True)
+    a=p.parse_args(); payload=json.loads(Path(a.payload).read_text(encoding="utf-8"))
     out=route(a.task_type,payload,prompt_version=a.prompt_version,force_model=a.force_model)
-    Path(a.out).write_text(json.dumps(out,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
-    print(a.out)
+    Path(a.out).write_text(json.dumps(out,ensure_ascii=False,indent=2)+"
+",encoding="utf-8"); print(a.out)
