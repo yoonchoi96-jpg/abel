@@ -52,9 +52,13 @@ jobs:
           GEMINI_MODEL: "gemini-3.8-flash"
           GEMINI_TTS_MODEL: "gemini-3.8-flash-tts"
           GEMINI_TTS_VOICE: "Kore"
+          INPUT_PROMPT: ${{ inputs.prompt }}
+          INPUT_TITLE: ${{ inputs.title }}
+          INPUT_LEVEL: ${{ inputs.level }}
+          INPUT_TOPIC: ${{ inputs.topic }}
         run: |
           python scripts/gemini_audio_executor.py \
-            "${{ inputs.prompt }}" \
-            --title "${{ inputs.title }}" \
-            --level "${{ inputs.level }}" \
-            --topic "${{ inputs.topic }}"
+            "$INPUT_PROMPT" \
+            --title "$INPUT_TITLE" \
+            --level "$INPUT_LEVEL" \
+            --topic "$INPUT_TOPIC"
