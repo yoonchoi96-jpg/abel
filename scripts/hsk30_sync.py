@@ -374,11 +374,15 @@ if __name__ == "__main__":
     mode.add_argument("--validate", action="store_true", help="read-only integrity checks")
     mode.add_argument("--dry-run", action="store_true", dest="dry_run",
                       help="preview sync without writing")
+    ap.add_argument("--strict", action="store_true",
+                    help="with --validate, exit non-zero when errors are found")
     args = ap.parse_args()
     if args.status:
         status()
     elif args.validate:
-        validate()
+        result = validate()
+        if args.strict and result["summary"]["errors"]:
+            raise SystemExit(1)
     elif args.dry_run:
         dry_run()
     else:
