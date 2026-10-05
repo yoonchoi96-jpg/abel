@@ -39,6 +39,18 @@ jobs:
           sudo apt-get install -y ffmpeg
       - name: Install Abel dependencies
         run: pip install -r requirements.txt
+      - name: Validate Drive folder secret shape
+        env:
+          ABEL_DRIVE_FOLDER_ID: ${{ secrets.ABEL_DRIVE_FOLDER_ID }}
+        run: |
+          python - <<'PY'
+          import os, re, hashlib
+          v = os.environ.get("ABEL_DRIVE_FOLDER_ID", "")
+          print(f"ABEL_DRIVE_FOLDER_ID length={len(v)}")
+          print(f"ABEL_DRIVE_FOLDER_ID sha256={hashlib.sha256(v.encode()).hexdigest()}")
+          if not re.fullmatch(r"[A-Za-z0-9_-]{10,}", v):
+              raise SystemExit("ABEL_DRIVE_FOLDER_ID is empty or not a valid-looking Google Drive folder ID.")
+          PY
       - name: Verify Google Drive access
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
