@@ -26,9 +26,15 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
     steps:
       - name: Checkout Abel
         uses: actions/checkout@v4
+      - name: Authenticate to Google Cloud (existing Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/382528581049/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: abel-github-deploy@gen-lang-client-0543639616.iam.gserviceaccount.com
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -41,14 +47,12 @@ jobs:
         run: pip install -r requirements.txt
       - name: Verify Google Drive access
         env:
-          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
-          ABEL_DRIVE_FOLDER_ID: ${{ secrets.ABEL_DRIVE_FOLDER_ID }}
+          ABEL_DRIVE_FOLDER_ID: ${{ secrets.ABEL_DRIVE_FOLDER_ID || '1un78ru9F32LCWMY9EDbt8hDPcrP2KHzU' }}
         run: python scripts/drive_audio_uploader.py --self-test
       - name: Generate lesson, Gemini TTS, and publish to Drive
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
-          ABEL_DRIVE_FOLDER_ID: ${{ secrets.ABEL_DRIVE_FOLDER_ID }}
+          ABEL_DRIVE_FOLDER_ID: ${{ secrets.ABEL_DRIVE_FOLDER_ID || '1un78ru9F32LCWMY9EDbt8hDPcrP2KHzU' }}
           GEMINI_MODEL: "gemini-3.8-flash"
           GEMINI_TTS_MODEL: "gemini-3.8-flash-tts"
           GEMINI_TTS_VOICE: "Kore"
