@@ -233,13 +233,11 @@ def main():
 
     publisher = DrivePublisher(os.getenv("ABEL_DRIVE_FOLDER_ID", ""))
     if args.self_test:
-        folder = publisher.ensure_path("AUDIO")
         print(json.dumps({
             "status": "success",
             "provider": "google_drive_api",
             "root_folder_id": publisher.root_folder_id,
-            "audio_folder_id": folder["id"],
-            "message": "Drive access verified.",
+            "message": "Abel Learning root access verified.",
         }, ensure_ascii=False))
         return
 
@@ -251,7 +249,8 @@ def main():
     time = args.time or now.strftime("%H%M%S")
     print(json.dumps(publisher.publish_lesson(
         args.file, date=date, time=time, title=args.title,
-        level=args.level, topic=args.topic, text=args.text
+        level=args.level, topic=args.topic, text=args.text,
+        language=args.language, skill=args.skill
     ), ensure_ascii=False))
 
 if __name__ == "__main__":
