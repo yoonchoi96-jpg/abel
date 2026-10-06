@@ -16,17 +16,17 @@ PROJECT="${PROJECT:-$(gcloud config get-value project 2>/dev/null)}"
   exit 1
 }
 
-[ -n "${ABEL_DRIVE_BRIDGE_URL:-}" ] || {
-  echo "ERROR: ABEL_DRIVE_BRIDGE_URL is required for production."
-  exit 1
-}
+[ -n "${ABEL_DRIVE_FOLDER_ID:-}" ] || { echo "ERROR: ABEL_DRIVE_FOLDER_ID is required for production."; exit 1; }
+[ -n "${GOOGLE_DRIVE_OAUTH_CLIENT_ID:-}" ] || { echo "ERROR: GOOGLE_DRIVE_OAUTH_CLIENT_ID is required for production."; exit 1; }
+[ -n "${GOOGLE_DRIVE_OAUTH_CLIENT_SECRET:-}" ] || { echo "ERROR: GOOGLE_DRIVE_OAUTH_CLIENT_SECRET is required for production."; exit 1; }
+[ -n "${GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN:-}" ] || { echo "ERROR: GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN is required for production."; exit 1; }
 
 [ -n "${GEMINI_API_KEY:-}" ] || {
   echo "ERROR: GEMINI_API_KEY is required for production Gemini TTS."
   exit 1
 }
 
-ENV_VARS="ABEL_DRIVE_BRIDGE_URL=${ABEL_DRIVE_BRIDGE_URL},ABEL_REQUIRE_DRIVE_BRIDGE=true,GEMINI_API_KEY=${GEMINI_API_KEY},GEMINI_TTS_MODEL=${GEMINI_TTS_MODEL:-gemini-3.8-flash-tts},GEMINI_TTS_VOICE=${GEMINI_TTS_VOICE:-Kore}"
+ENV_VARS="ABEL_DRIVE_FOLDER_ID=${ABEL_DRIVE_FOLDER_ID},GOOGLE_DRIVE_OAUTH_CLIENT_ID=${GOOGLE_DRIVE_OAUTH_CLIENT_ID},GOOGLE_DRIVE_OAUTH_CLIENT_SECRET=${GOOGLE_DRIVE_OAUTH_CLIENT_SECRET},GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN=${GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN},GEMINI_API_KEY=${GEMINI_API_KEY},GEMINI_TTS_MODEL=${GEMINI_TTS_MODEL:-gemini-3.8-flash-tts},GEMINI_TTS_VOICE=${GEMINI_TTS_VOICE:-Kore}"
 if [ -n "${MCP_AUTH_TOKEN:-}" ]; then
   ENV_VARS="$ENV_VARS,MCP_AUTH_TOKEN=$MCP_AUTH_TOKEN"
 fi
@@ -35,7 +35,7 @@ echo "== Abel MCP deploy =="
 echo "project : $PROJECT"
 echo "region  : $REGION"
 echo "service : $SERVICE"
-echo "drive   : configured"
+echo "drive   : OAuth user credentials"
 echo "gemini  : configured"
 echo
 
