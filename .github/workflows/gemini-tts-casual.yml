@@ -14,7 +14,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -42,12 +41,6 @@ jobs:
           GEMINI_TTS_MODEL: "gemini-3.8-flash-tts"
           GEMINI_TTS_VOICE: "Kore"
         run: python scripts/gemini_tts_casual.py
-
-      - name: Verify MP3
-        run: |
-          test -s gemini_tts_hsk6_casual.mp3
-          file gemini_tts_hsk6_casual.mp3
-          ls -lh gemini_tts_hsk6_casual.mp3
 
       - name: Verify MP3
         run: |
