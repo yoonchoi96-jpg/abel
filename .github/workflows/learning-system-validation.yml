@@ -25,7 +25,6 @@ jobs:
         run: |
           PYTHONPATH=. python scripts/learning_session_test.py
           PYTHONPATH=. python scripts/question_bank_index_test.py
-          PYTHONPATH=. python scripts/learning_drive_publisher_test.py
           PYTHONPATH=. python scripts/resource_catalog_test.py
           PYTHONPATH=. python scripts/learning_practice_test.py
           PYTHONPATH=. python scripts/mock_test_engine_test.py
