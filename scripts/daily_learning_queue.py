@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 """Build a deterministic daily review queue from Abel learning history.
 
-No new learning content is invented. Every queue item points to a previously
-recorded practice question/resource or is omitted when source identity is absent.
+No new learning content is invented. Queue items are source-backed practice
+questions recorded by Abel, with active spaced-review state applied.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import sqlite3
-from review_state_engine import connect as connect_review
-
-def _parse_review_time(value: str):
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from learning_session import connect as connect_learning
+from review_state_engine import connect as connect_review
+
 SCHEMA = "abel.learning.daily-queue.v1"
+
+
+def _parse_review_time(value: str):
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
 def _priority(wrong: int, last_seen: str | None, error_type: str | None) -> float:
@@ -24,7 +27,10 @@ def _priority(wrong: int, last_seen: str | None, error_type: str | None) -> floa
     if last_seen:
         try:
             dt = datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
-            age_days = max(0.0, (datetime.now(timezone.utc) - dt).total_seconds() / 86400)
+            age_days = max(
+                0.0,
+                (datetime.now(timezone.utc) - dt).total_seconds() / 86400,
+            )
         except ValueError:
             pass
     recency = min(age_days, 30.0) / 30.0
@@ -40,10 +46,17 @@ def build_queue(language: str, db_path: str | Path, limit: int = 20, days: int =
     if days < 1 or days > 365:
         raise ValueError("days must be 1..365")
 
-    con = sqlite3.connect(db_path)
-    con.row_factory = sqlite3.Row
+    db_path = Path(db_path)
+
+    # learning_session owns the durable learning schema, including
+    # practice_errors. review_state_engine owns review_states.
     connect_review(db_path).close()
+    con = connect_learning(db_path)
+    con.row_factory = sqlite3.Row
+
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    now_iso = datetime.now(timezone.utc).isoformat()
+
     rows = con.execute(
         """SELECT question_id, resource_id, kind, level, error_type,
                   COUNT(*) AS wrong_count, MAX(occurred_at) AS last_seen
@@ -56,37 +69,51 @@ def build_queue(language: str, db_path: str | Path, limit: int = 20, days: int =
 
     candidates = []
     seen = set()
+
     for r in rows:
         if not r["resource_id"]:
             continue
         key = (str(r["question_id"]), str(r["resource_id"]))
+        if key in seen:
+            continue
         seen.add(key)
-        candidates.append({
-            "question_id": r["question_id"],
-            "resource_id": r["resource_id"],
-            "kind": r["kind"],
-            "level": r["level"],
-            "error_type": r["error_type"],
-            "wrong_count": int(r["wrong_count"]),
-            "last_seen": r["last_seen"],
-            "priority": _priority(int(r["wrong_count"]), r["last_seen"], r["error_type"]),
-        })
+        candidates.append(
+            {
+                "question_id": r["question_id"],
+                "resource_id": r["resource_id"],
+                "kind": r["kind"],
+                "level": r["level"],
+                "error_type": r["error_type"],
+                "wrong_count": int(r["wrong_count"]),
+                "last_seen": r["last_seen"],
+                "priority": _priority(
+                    int(r["wrong_count"]), r["last_seen"], r["error_type"]
+                ),
+            }
+        )
 
-    # Resurface due items from the spaced-review state as well as recent errors.
-    # review_states is created only after a source-backed question is attempted.
+    # Latest recorded error metadata for due spaced-review items.
+    latest_errors = {}
+    latest_rows = con.execute(
+        """SELECT pe.question_id, pe.resource_id, pe.error_type
+           FROM practice_errors pe
+           JOIN (
+             SELECT language, question_id, resource_id, MAX(id) AS max_id
+             FROM practice_errors
+             WHERE language=? AND resource_id IS NOT NULL
+             GROUP BY language, question_id, resource_id
+           ) latest ON latest.max_id=pe.id""",
+        (language,),
+    ).fetchall()
+    for r in latest_rows:
+        latest_errors[(str(r["question_id"]), str(r["resource_id"]))] = r["error_type"]
+
     review_rows = con.execute(
-        """SELECT rs.*, pe.error_type AS latest_error_type
-           FROM review_states rs
-           LEFT JOIN practice_errors pe
-             ON pe.id = (
-               SELECT MAX(pe2.id) FROM practice_errors pe2
-               WHERE pe2.language=rs.language
-                 AND pe2.question_id=rs.question_id
-                 AND pe2.resource_id=rs.resource_id
-             )
-           WHERE rs.language=? AND rs.status="active" AND rs.next_review_at<=?
-           ORDER BY rs.next_review_at ASC, rs.wrong_count DESC, rs.question_id ASC""",
-        (language, datetime.now(timezone.utc).isoformat()),
+        """SELECT *
+           FROM review_states
+           WHERE language=? AND status='active' AND next_review_at<=?
+           ORDER BY next_review_at ASC, wrong_count DESC, question_id ASC""",
+        (language, now_iso),
     ).fetchall()
 
     for r in review_rows:
@@ -94,45 +121,40 @@ def build_queue(language: str, db_path: str | Path, limit: int = 20, days: int =
         if not r["resource_id"] or key in seen:
             continue
         seen.add(key)
-        error_type = r["latest_error_type"]
-        candidates.append({
-            "question_id": r["question_id"],
-            "resource_id": r["resource_id"],
-            "kind": r["kind"],
-            "level": r["level"],
-            "error_type": error_type,
-            "wrong_count": int(r["wrong_count"]),
-            "last_seen": r["last_seen"],
-            "priority": _priority(int(r["wrong_count"]), r["last_seen"], error_type) + 0.5,
-        })
+        error_type = latest_errors.get(key)
+        candidates.append(
+            {
+                "question_id": r["question_id"],
+                "resource_id": r["resource_id"],
+                "kind": r["kind"],
+                "level": r["level"],
+                "error_type": error_type,
+                "wrong_count": int(r["wrong_count"]),
+                "last_seen": r["last_seen"],
+                "priority": _priority(
+                    int(r["wrong_count"]), r["last_seen"], error_type
+                )
+                + 0.5,
+            }
+        )
+
+    # Enrich every candidate with its durable review state.
+    states = {
+        (str(r["question_id"]), str(r["resource_id"])): dict(r)
+        for r in con.execute(
+            "SELECT * FROM review_states WHERE language=?",
+            (language,),
+        ).fetchall()
+    }
     con.close()
 
-    candidates = []
-    for r in rows:
-        if not r["resource_id"]:
-            continue
-        candidates.append({
-            "question_id": r["question_id"],
-            "resource_id": r["resource_id"],
-            "kind": r["kind"],
-            "level": r["level"],
-            "error_type": r["error_type"],
-            "wrong_count": int(r["wrong_count"]),
-            "last_seen": r["last_seen"],
-            "priority": _priority(int(r["wrong_count"]), r["last_seen"], r["error_type"]),
-        })
-    review_con = connect_review(db_path)
-    review_rows = review_con.execute(
-        "SELECT * FROM review_states WHERE language=?",
-        (language,),
-    ).fetchall()
-    review_con.close()
-    states = {(r["question_id"], r["resource_id"]): dict(r) for r in review_rows}
     now = datetime.now(timezone.utc)
+    enriched = []
     for item in candidates:
-        state = states.get((item["question_id"], item["resource_id"]))
+        state = states.get((str(item["question_id"]), str(item["resource_id"])))
         if state and state["status"] == "mastered":
             continue
+
         if state:
             item["review_state"] = {
                 "review_count": state["review_count"],
@@ -148,10 +170,13 @@ def build_queue(language: str, db_path: str | Path, limit: int = 20, days: int =
             try:
                 next_review = _parse_review_time(state["next_review_at"])
                 item["due"] = next_review <= now
-                if item["due"]:
-                    item["review_reason"] = "overdue" if next_review < now else "due"
-                else:
-                    item["review_reason"] = "scheduled"
+                item["review_reason"] = (
+                    "overdue"
+                    if next_review < now
+                    else "due"
+                    if item["due"]
+                    else "scheduled"
+                )
             except ValueError:
                 item["due"] = False
                 item["review_reason"] = "scheduled"
@@ -160,7 +185,9 @@ def build_queue(language: str, db_path: str | Path, limit: int = 20, days: int =
             item["due"] = True
             item["review_reason"] = "new"
 
-    candidates.sort(
+        enriched.append(item)
+
+    enriched.sort(
         key=lambda x: (
             0 if x["due"] else 1,
             x["review_state"]["next_review_at"] if x["review_state"] else "",
@@ -169,7 +196,7 @@ def build_queue(language: str, db_path: str | Path, limit: int = 20, days: int =
             x["question_id"],
         )
     )
-    queue = candidates[:limit]
+    queue = enriched[:limit]
 
     return {
         "schema_version": SCHEMA,
@@ -201,7 +228,10 @@ def main() -> None:
     a = p.parse_args()
     payload = build_queue(a.language, a.db, a.limit, a.days)
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
-    Path(a.out).write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    Path(a.out).write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     print(a.out)
 
 
