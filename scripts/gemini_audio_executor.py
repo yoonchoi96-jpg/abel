@@ -336,8 +336,16 @@ GENERATE_LESSON_AUDIO = {
             },
             "language": {
                 "type": "string",
-                "enum": ["zh-CN"],
-                "description": "Active learning language. Current production route: zh-CN.",
+                "description": "Learning language code/name, e.g. zh-CN, es, fr.",
+            },
+            "skill": {
+                "type": "string",
+                "enum": ["reading", "listening", "writing", "speaking", "vocabulary", "grammar", "culture"],
+                "description": "Learning skill used by Abel's canonical Drive router.",
+            },
+            "content_type": {
+                "type": "string",
+                "description": "Learning artifact type, e.g. audio_lesson or practice.",
             },
             "delivery_mode": {
                 "type": "string",
@@ -495,6 +503,11 @@ def generate_and_save_gemini_audio(arguments: dict) -> dict:
         level=arguments.get("level", ""),
         topic=arguments.get("topic", ""),
         text=arguments.get("text", ""),
+        language=arguments.get("language", "zh-CN"),
+        skill=arguments.get("skill", "listening"),
+        content_type=arguments.get("content_type", "audio_lesson"),
+        delivery_mode=arguments.get("delivery_mode", ""),
+        speaker_mode=arguments.get("speaker_mode", "single"),
     )
     try:
         os.remove(output_path)
