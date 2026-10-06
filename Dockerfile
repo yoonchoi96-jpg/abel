@@ -1,5 +1,6 @@
 # Abel MCP production runtime
 # Gemini TTS production runtime
+# Drive bridge production routing enabled
 FROM python:3.12-slim
 
 WORKDIR /app
