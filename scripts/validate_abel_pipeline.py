@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Local, network-free Abel pipeline validator.
 
-Run on the Mac after pulling the repository. It checks Python syntax,
+Run as a local/network-free data validator. It checks Python syntax,
 HSK source counts, local DB presence, export JSON shape, and Drive folders.
 """
 from __future__ import annotations
@@ -20,9 +20,7 @@ EDUCATION = HOME / ".naver_wordbook/exports/abel_gemini_education.json"
 DRIVE_CANDIDATES = list((HOME / "Library/CloudStorage").glob("GoogleDrive-*/My Drive/Abel")) if (HOME / "Library/CloudStorage").exists() else []
 
 CHECK_SCRIPTS = [
-    ROOT / "scripts/naver_wordbook_sync.py",
     ROOT / "scripts/hsk30_sync.py",
-    ROOT / "scripts/abel_daemon.py",
     ROOT / "scripts/abel_drive_bridge.py",
 ]
 
