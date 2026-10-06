@@ -229,8 +229,6 @@ def generate_lesson_audio(
             }
 
         try:
-            if os.getenv("ABEL_REQUIRE_DRIVE_BRIDGE", "").strip().lower() == "true" and not os.getenv("ABEL_DRIVE_BRIDGE_URL", "").strip():
-                return {"status": "error", "stage": "google_drive", "message": "ABEL_DRIVE_BRIDGE_URL is required in production."}
             publisher = DrivePublisher(os.getenv("ABEL_DRIVE_FOLDER_ID", ""))
             return publisher.publish_lesson(
                 mp3_path,
