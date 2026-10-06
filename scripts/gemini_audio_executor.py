@@ -367,7 +367,7 @@ GENERATE_LESSON_AUDIO = {
                 "description": "Speaker topology. Dual requires the multi-speaker renderer.",
             },
         },
-        "required": ["action", "text"],
+        "required": ["action", "text", "language", "skill"],
     },
 }
 
