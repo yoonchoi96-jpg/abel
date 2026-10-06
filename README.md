@@ -42,16 +42,10 @@ Never put Naver passwords, cookies, storage state, or browser profiles in GitHub
 
 ## Commands
 
-```bash
-python scripts/naver_wordbook_sync.py --bootstrap
-python scripts/naver_wordbook_sync.py --probe
-python scripts/naver_wordbook_sync.py --sync
-```
-
-The local collector commands are legacy tooling only and are not part of the production Abel execution path.
+No Naver login, browser automation, session export, or collection command is part of the production Abel repository anymore. `data/naver_wordbook.json` is treated as an imported data boundary.
 
 ## Security
 
 Never commit browser profiles, cookies, storage-state exports, or raw authentication material.
 
-If the Naver session expires, refresh the authenticated browser session and replace `NAVER_STORAGE_STATE_B64` rather than falling back to storing a password.
+If Naver-side data needs to be refreshed, obtain/export it through a user-controlled and explicitly permitted mechanism, then update the data boundary. Abel itself must not automate the Naver account.
