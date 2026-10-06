@@ -17,82 +17,15 @@ A word may belong to multiple wordbooks. Global word records are deduplicated wh
 
 Naver's `신HSK_6급 필수단어 1~10탄` are grouped into `신HSK 6급`; `신HSK_5급 필수단어 1~5탄` are grouped into `신HSK 5급`.
 
-## Local data
+## Data boundary
 
-- Authenticated browser profile: `~/.naver_wordbook/browser_profile` (manual Mac fallback only)
-- Raw probe/sync snapshots: `~/.naver_wordbook/exports/`
-- SQLite: `~/.naver_wordbook/naver_wordbook.sqlite3`
-- Repository export: `data/naver_wordbook.json`
+Naver account access is intentionally **outside** Abel's production automation boundary.
 
-Never commit the browser profile or cookies.
+Abel does not use GitHub Actions, self-hosted runners, Playwright browser sessions, stored Naver cookies, or `NAVER_STORAGE_STATE_B64` to access the account. The canonical downstream input is `data/naver_wordbook.json`.
 
-## Canonical GitHub-hosted workflow
+This keeps the Naver account separate from the GitHub automation plane. Any future Naver-side collection must use a user-controlled and explicitly permitted mechanism, then import the resulting data into Abel.
 
-The canonical workflow is:
-
-```
-Authenticated Naver browser
-        ↓
-NAVER_STORAGE_STATE_B64 GitHub secret
-        ↓
-GitHub-hosted Ubuntu runner
-        ↓
-Playwright Chromium
-        ↓
-data/naver_wordbook.json
-```
-
-Workflow: `.github/workflows/naver-wordbook-sync-hosted.yml`
-
-Modes:
-- `probe`: validates the session and collects diagnostics without changing the canonical JSON.
-- `sync`: collects wordbooks, updates SQLite/export data, and commits `data/naver_wordbook.json` when it changes.
-
-The workflow is currently manual-dispatch until the authenticated storage-state secret is proven stable. This avoids scheduling repeated failures when the Naver session is missing or expired.
-
-Before collection, the workflow validates that `NAVER_STORAGE_STATE_B64` is present and is valid base64-encoded Playwright storage state.
-
-## Authentication lifecycle
-
-Abel never stores the Naver password.
-
-GitHub-hosted runners are ephemeral, so Naver authentication is restored from `NAVER_STORAGE_STATE_B64`. The storage state must originate from an already-authenticated Naver browser session.
-
-If Naver authentication expires:
-1. Open an authenticated Naver browser session on a machine where the Naver login is available.
-2. Export a fresh Playwright storage state with `scripts/export_naver_storage_state.py`.
-3. Replace the repository secret `NAVER_STORAGE_STATE_B64`.
-4. Run the hosted workflow in `probe` mode first.
-5. Run `sync` only after the probe succeeds.
-
-Never commit the storage-state output.
-
-## Legacy Mac fallback
-
-The former Mac self-hosted workflow is retained only as a manual fallback:
-
-`.github/workflows/naver-wordbook-sync.yml`
-
-It requires runner labels:
-- `self-hosted`
-- `macOS`
-- `naver-wordbook`
-
-It is not the canonical scheduled path.
-
-## First-run / recovery on Mac
-
-```bash
-cd ~/abel
-python3 -m venv .venv
-source .venv/bin/activate
-pip install playwright
-python -m playwright install chromium
-python scripts/naver_wordbook_sync.py --bootstrap
-python scripts/naver_wordbook_sync.py --probe
-```
-
-Probe output is intentionally retained before production sync so the current Naver SPA/API structure can be hardened without losing evidence.
+Never place Naver passwords, cookies, storage state, or browser profiles in GitHub.
 
 ## HSK 3.0
 
