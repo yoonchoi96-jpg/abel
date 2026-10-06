@@ -4,9 +4,9 @@ Abel is the Naver Dictionary personal wordbook sync system.
 
 ## Core design
 
-**Authenticated Naver session → Playwright storage state → GitHub-hosted Ubuntu runner → raw snapshots + normalized SQLite → GitHub JSON export → downstream learning tools**
+**Naver wordbook data → versioned GitHub JSON → downstream learning tools**
 
-The canonical Naver sync path is now the GitHub-hosted workflow. The former Mac self-hosted runner is retained only as a manual legacy fallback.
+Naver account access is intentionally outside Abel's production automation path. Abel consumes the already-exported `data/naver_wordbook.json` as its canonical downstream input.
 
 Abel also maintains two curated HSK 3.0 collections in the same SQLite database: **Level 6 new vocabulary (1,140)** and the combined **Level 7–9 advanced band (5,600)**.
 
@@ -32,15 +32,13 @@ HSK numbered Naver volumes are grouped: `신HSK_5급 필수단어 1~5탄` → `�
 - `scripts/hsk30_sync.py`: imports both collections into the same SQLite schema.
 - `.github/workflows/hsk30-sync.yml`: scheduled daily at 07:00 KST.
 
-## Browser / authentication
+## Naver data boundary
 
-Abel never stores the Naver password.
+Abel intentionally does not automate access to the user's Naver account. It does not use GitHub Actions, a self-hosted runner, Playwright login, stored Naver sessions, or `NAVER_STORAGE_STATE_B64` to access the account.
 
-The hosted runner is ephemeral, so the authenticated browser session is supplied as the GitHub repository secret `NAVER_STORAGE_STATE_B64`, containing Playwright storage state exported from an already-authenticated Naver browser session. The secret must never be committed or printed.
+The canonical repository input is `data/naver_wordbook.json`. Any future Naver-side collection must use a user-controlled and explicitly permitted mechanism, then import the resulting data into Abel.
 
-The Mac self-hosted runner and local persistent browser profile remain available only for manual recovery/bootstrap:
-- `~/.naver_wordbook/browser_profile`
-- `.github/workflows/naver-wordbook-sync.yml` (legacy/manual)
+Never put Naver passwords, cookies, storage state, or browser profiles in GitHub or GitHub Secrets.
 
 ## Commands
 
@@ -50,7 +48,7 @@ python scripts/naver_wordbook_sync.py --probe
 python scripts/naver_wordbook_sync.py --sync
 ```
 
-For GitHub-hosted operation, use `.github/workflows/naver-wordbook-sync-hosted.yml` with `sync` or `probe`. The hosted workflow validates `NAVER_STORAGE_STATE_B64` before starting the collector.
+The local collector commands are legacy tooling only and are not part of the production Abel execution path.
 
 ## Security
 
