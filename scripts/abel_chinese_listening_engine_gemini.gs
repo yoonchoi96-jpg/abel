@@ -1,15 +1,15 @@
 /**
- * Abel Chinese Listening Storage Bridge
+ * Abel Learning Drive Bridge
  *
  * Gemini TTS generation is owned by the Python TTS router/renderer.
  * This Apps Script is storage-only: it accepts finished MP3 bytes and writes
- * them under the configured Chinese Drive folder.
+ * them under the configured Abel Learning root.
  */
 
 function doGet(e) {
   return jsonResponse({
     status: "online",
-    engine: "Abel Chinese Listening Storage Bridge",
+    engine: "Abel Learning Drive Bridge",
     provider: "gemini",
     message: "Storage bridge is running. TTS synthesis is disabled here."
   });
@@ -48,15 +48,9 @@ function doPost(e) {
   }
 }
 
-function chineseRootFolder() {
-  var folderId = PropertiesService
-    .getScriptProperties()
-    .getProperty("ABEL_CHINESE_FOLDER_ID");
-
-  if (!folderId) {
-    throw new Error("ABEL_CHINESE_FOLDER_ID is missing from Script Properties.");
-  }
-
+function learningRootFolder() {
+  var folderId = PropertiesService.getScriptProperties().getProperty("ABEL_LEARNING_FOLDER_ID");
+  if (!folderId) throw new Error("ABEL_LEARNING_FOLDER_ID is missing from Script Properties.");
   return DriveApp.getFolderById(folderId);
 }
 
@@ -65,135 +59,58 @@ function getOrCreateChildFolder(parent, name) {
   return folders.hasNext() ? folders.next() : parent.createFolder(name);
 }
 
-function chineseAudioFolder(date) {
-  var root = chineseRootFolder();
-  var audio = getOrCreateChildFolder(root, "AUDIO");
-  return getOrCreateChildFolder(audio, date);
+function routedFolder(language, skill, level, date) {
+  var root = learningRootFolder();
+  return [language || "Unknown", skill || "General", level || "General", date]
+    .reduce(function(parent, name) { return getOrCreateChildFolder(parent, name); }, root);
 }
 
-function chineseOutboxFolder() {
-  return getOrCreateChildFolder(chineseRootFolder(), "OUTBOX");
-}
-
-function chineseLogFolder() {
-  return getOrCreateChildFolder(chineseRootFolder(), "LOG");
+function logFolder() {
+  return getOrCreateChildFolder(getOrCreateChildFolder(learningRootFolder(), "_SYSTEM"), "LOG");
 }
 
 function handleSaveGeminiLessonAudio(data) {
   var audioBase64 = data.audioBase64;
-  if (!audioBase64) {
-    return jsonResponse({status: "error", message: "Missing audioBase64."});
-  }
+  if (!audioBase64) return jsonResponse({status: "error", message: "Missing audioBase64."});
 
   var now = new Date();
-  var sessionDate = data.date || Utilities.formatDate(
-    now, Session.getScriptTimeZone(), "yyyy-MM-dd"
-  );
-  var sessionTime = data.time || Utilities.formatDate(
-    now, Session.getScriptTimeZone(), "HHmmss"
-  );
-
-  var folder = chineseAudioFolder(sessionDate);
+  var sessionDate = data.date || Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  var sessionTime = data.time || Utilities.formatDate(now, Session.getScriptTimeZone(), "HHmmss");
+  var folder = routedFolder(data.languageLabel || data.language || "Unknown", data.skill || "General", data.level || "General", sessionDate);
   var fileName = data.fileName || ("lesson_" + sessionDate + "_" + sessionTime + ".mp3");
 
   var existingFiles = folder.getFilesByName(fileName);
   if (existingFiles.hasNext()) {
     var existingFile = existingFiles.next();
-    return jsonResponse({
-      status: "success",
-      cached: true,
-      provider: "gemini",
-      fileId: existingFile.getId(),
-      fileUrl: existingFile.getUrl(),
-      fileName: existingFile.getName()
-    });
+    return jsonResponse({status:"success", cached:true, provider:"gemini", fileId:existingFile.getId(), fileUrl:existingFile.getUrl(), fileName:existingFile.getName()});
   }
 
-  var audioBlob = Utilities.newBlob(
-    Utilities.base64Decode(audioBase64),
-    data.mimeType || "audio/mpeg",
-    fileName
-  );
+  var audioBlob = Utilities.newBlob(Utilities.base64Decode(audioBase64), data.mimeType || "audio/mpeg", fileName);
   var file = folder.createFile(audioBlob);
 
-  saveOutboxJson(sessionDate, sessionTime, data, file);
-  appendLog(sessionDate, sessionTime, "SUCCESS_GEMINI_TTS", file.getId());
+  var manifest = {
+    status: "success", provider: "gemini", createdAt: new Date().toISOString(),
+    language: data.language || "", languageLabel: data.languageLabel || "",
+    skill: data.skill || "", level: data.level || "", type: data.type || "audio_lesson",
+    route: data.route || "", lesson: data.lesson || {},
+    audio: {fileId:file.getId(), fileName:file.getName(), fileUrl:file.getUrl()}
+  };
+  folder.createFile("lesson_" + sessionDate + "_" + sessionTime + ".json",
+                    JSON.stringify(manifest, null, 2), "application/json");
+
+  var log = {
+    timestamp:new Date().toISOString(), session:sessionDate + "_" + sessionTime,
+    status:"SUCCESS_GEMINI_TTS", language:data.language || "", skill:data.skill || "",
+    level:data.level || "", path:data.route || "", fileId:file.getId()
+  };
+  logFolder().createFile("generation_" + sessionDate + "_" + sessionTime + ".json",
+                         JSON.stringify(log, null, 2), "application/json");
 
   return jsonResponse({
-    status: "success",
-    cached: false,
-    provider: "gemini",
-    fileId: file.getId(),
-    fileUrl: file.getUrl(),
-    fileName: file.getName(),
-    date: sessionDate,
-    time: sessionTime,
-    message: "Gemini TTS MP3 saved to the configured Chinese Drive folder."
+    status:"success", cached:false, provider:"gemini", fileId:file.getId(),
+    fileUrl:file.getUrl(), fileName:file.getName(), date:sessionDate, time:sessionTime,
+    route:data.route || "", message:"Gemini TTS MP3 saved to routed Abel Learning Drive."
   });
-}
-
-function saveOutboxJson(date, time, data, audioFile) {
-  var folder = chineseOutboxFolder();
-  var fileName = "lesson_" + date + "_" + time + ".json";
-  var existing = folder.getFilesByName(fileName);
-
-  while (existing.hasNext()) {
-    existing.next().setTrashed(true);
-  }
-
-  var output = {
-    status: "success",
-    provider: "gemini",
-    createdAt: new Date().toISOString(),
-    session: {date: date, time: time},
-    lesson: {
-      action: data.action || "",
-      text: data.text || "",
-      title: data.title || "",
-      level: data.level || "",
-      topic: data.topic || ""
-    },
-    audio: {
-      fileId: audioFile.getId(),
-      fileName: audioFile.getName(),
-      fileUrl: audioFile.getUrl()
-    }
-  };
-
-  folder.createFile(
-    fileName,
-    JSON.stringify(output, null, 2),
-    "application/json"
-  );
-}
-
-function appendLog(date, time, status, fileId) {
-  var folder = chineseLogFolder();
-  var files = folder.getFilesByName("generation_log.json");
-  var logData = [];
-  var logFile;
-
-  if (files.hasNext()) {
-    logFile = files.next();
-    try {
-      logData = JSON.parse(logFile.getBlob().getDataAsString());
-      if (!Array.isArray(logData)) logData = [];
-    } catch (e) {
-      logData = [];
-    }
-  } else {
-    logFile = folder.createFile("generation_log.json", "[]", "application/json");
-  }
-
-  logData.push({
-    timestamp: new Date().toISOString(),
-    session: date + "_" + time,
-    status: status,
-    provider: "gemini",
-    fileId: fileId || null
-  });
-
-  logFile.setContent(JSON.stringify(logData, null, 2));
 }
 
 function jsonResponse(data) {
