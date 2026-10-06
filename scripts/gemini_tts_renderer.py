@@ -11,6 +11,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 from google import genai
@@ -155,6 +156,68 @@ def _audio_bytes(response) -> bytes:
     return bytes(data)
 
 
+def _split_single(script: str, target: int = 550) -> list[str]:
+    sentences = [x.strip() for x in re.split(r"(?<=[。！？!?；;])\\s*", script) if x.strip()]
+    chunks, current = [], ""
+    for sentence in sentences:
+        if len(sentence) > 700:
+            if current:
+                chunks.append(current); current = ""
+            chunks.extend(sentence[i:i+target] for i in range(0, len(sentence), target))
+            continue
+        candidate = sentence if not current else f"{current} {sentence}"
+        if current and len(candidate) > target:
+            chunks.append(current); current = sentence
+        else:
+            current = candidate
+    if current: chunks.append(current)
+    return chunks or [script]
+
+
+def _split_dual(turns: list[tuple[str, str]], target: int = 550) -> list[list[tuple[str, str]]]:
+    chunks, current, size = [], [], 0
+    for speaker, text in turns:
+        if len(text) > 700:
+            if current:
+                chunks.append(current); current = []; size = 0
+            chunks.extend([[(speaker, text[i:i+target])] for i in range(0, len(text), target)])
+            continue
+        if current and size + len(text) > target:
+            chunks.append(current); current = []; size = 0
+        current.append((speaker, text)); size += len(text)
+    if current: chunks.append(current)
+    return chunks or [turns]
+
+
+def _render_with_retry(fn):
+    last = None
+    for attempt in range(1, 4):
+        try:
+            return fn()
+        except Exception as exc:
+            last = exc
+            if attempt < 3:
+                time.sleep(1.5 * attempt)
+    raise RuntimeError(f"Gemini TTS chunk failed after 3 attempts: {last}") from last
+
+
+def _merge_wavs(wavs: list[Path], output_wav: Path) -> None:
+    if not wavs:
+        raise RuntimeError("No TTS chunks were generated.")
+    if len(wavs) == 1:
+        shutil.copyfile(wavs[0], output_wav)
+        return
+    if shutil.which("ffmpeg") is None:
+        raise RuntimeError("ffmpeg is required to merge Gemini TTS chunks.")
+    concat = output_wav.parent / "concat.txt"
+    concat.write_text("".join(f"file '{p.as_posix()}'\\n" for p in wavs), encoding="utf-8")
+    subprocess.run([
+        "ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0",
+        "-i", str(concat), "-ar", str(SAMPLE_RATE), "-ac", "1", "-c:a", "pcm_s16le",
+        str(output_wav)
+    ], check=True)
+
+
 def render_gemini_tts(
     text: str,
     output_mp3: str | Path,
@@ -170,7 +233,6 @@ def render_gemini_tts(
     script = (text or "").strip()
     if not script:
         raise ValueError("TTS text is empty.")
-
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not set.")
@@ -185,29 +247,27 @@ def render_gemini_tts(
     voice_name = voice or route.voice
     style_text = style or route.style
 
-    if speaker_mode == "dual":
-        turns = _parse_dual_speaker_script(script)
-        data = _render_dual(
-            client,
-            turns,
-            model_name=model_name,
-            style_text=style_text,
-        )
-    else:
-        data = _render_single(
-            client,
-            script,
-            model_name=model_name,
-            voice_name=voice_name,
-            style_text=style_text,
-        )
-
-    target = Path(output_mp3)
-    target.parent.mkdir(parents=True, exist_ok=True)
-
     with tempfile.TemporaryDirectory(prefix="abel-gemini-tts-") as tmp:
-        wav = Path(tmp) / "speech.wav"
-        wav.write_bytes(data)
-        wav_to_mp3(wav, target, bitrate=bitrate)
+        root = Path(tmp)
+        wavs = []
+        if speaker_mode == "dual":
+            chunks = _split_dual(_parse_dual_speaker_script(script))
+            for idx, chunk in enumerate(chunks, 1):
+                data = _render_with_retry(lambda chunk=chunk: _render_dual(
+                    client, chunk, model_name=model_name, style_text=style_text))
+                path = root / f"chunk_{idx:03d}.wav"
+                path.write_bytes(data); wavs.append(path)
+        else:
+            chunks = _split_single(script)
+            for idx, chunk in enumerate(chunks, 1):
+                data = _render_with_retry(lambda chunk=chunk: _render_single(
+                    client, chunk, model_name=model_name, voice_name=voice_name, style_text=style_text))
+                path = root / f"chunk_{idx:03d}.wav"
+                path.write_bytes(data); wavs.append(path)
 
+        target = Path(output_mp3)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        merged = root / "merged.wav"
+        _merge_wavs(wavs, merged)
+        wav_to_mp3(merged, target, bitrate=bitrate)
     return target
