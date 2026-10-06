@@ -22,11 +22,14 @@ Apps Script and Cloud Run are outside the new production audio path.
 
 ## One-time setup
 
-1. Enable Google Drive API in the GCP project used by `GCP_SA_KEY`.
-2. Share the existing `Abel` Drive folder with the service-account email from `GCP_SA_KEY` and grant Editor/Writer access.
-3. Copy the existing `Abel` folder ID.
-4. Add GitHub Actions secret `ABEL_DRIVE_FOLDER_ID`.
-5. Keep `GEMINI_API_KEY` and `GCP_SA_KEY`.
+Authentication uses the existing Workload Identity Federation setup (service account `abel-github-deploy@gen-lang-client-0543639616.iam.gserviceaccount.com`), the same as `deploy-abel-mcp.yml`. No JSON key is created or needed.
+
+1. Drive API is enabled in the GCP project (done by `deploy-abel-mcp.yml`).
+2. Share the `Abel` Drive folder with that service-account email as Editor/Writer.
+3. Optionally set GitHub Actions secret `ABEL_DRIVE_FOLDER_ID` (otherwise the repo default folder ID is used).
+4. Keep `GEMINI_API_KEY`.
+
+If `GCP_SA_KEY` is set in the environment, `drive_audio_uploader.py` still uses it first; otherwise it uses Application Default Credentials.
 
 Drive permissions on a parent folder propagate to child items, so one share on the Abel folder is sufficient for this publisher.
 
