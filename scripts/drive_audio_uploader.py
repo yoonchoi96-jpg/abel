@@ -7,6 +7,7 @@ from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 from google.auth.transport.requests import AuthorizedSession
 from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials as OAuthCredentials
 
 try:
     from learning_router import resolve_learning_route
@@ -21,6 +22,12 @@ API = "https://www.googleapis.com/drive/v3"
 UPLOAD_API = "https://www.googleapis.com/upload/drive/v3"
 
 def credentials():
+    client_id = os.getenv("GOOGLE_DRIVE_OAUTH_CLIENT_ID", "").strip()
+    client_secret = os.getenv("GOOGLE_DRIVE_OAUTH_CLIENT_SECRET", "").strip()
+    refresh_token = os.getenv("GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN", "").strip()
+    if client_id and client_secret and refresh_token:
+        return OAuthCredentials(token=None, refresh_token=refresh_token, token_uri="https://oauth2.googleapis.com/token", client_id=client_id, client_secret=client_secret, scopes=[DRIVE_SCOPE])
+
     raw = os.getenv("GCP_SA_KEY", "").strip()
     if raw:
         return service_account.Credentials.from_service_account_info(
@@ -47,11 +54,10 @@ def credentials():
 
 class DrivePublisher:
     def __init__(self, root_folder_id: str):
-        self.bridge_url = os.getenv("ABEL_DRIVE_BRIDGE_URL", "").strip()
-        self.root_folder_id = root_folder_id
-        self.session = None if self.bridge_url else AuthorizedSession(credentials())
-        if not self.bridge_url and not root_folder_id:
-            raise RuntimeError("ABEL_DRIVE_BRIDGE_URL or ABEL_DRIVE_FOLDER_ID is required.")
+        self.root_folder_id = root_folder_id.strip()
+        if not self.root_folder_id:
+            raise RuntimeError("ABEL_DRIVE_FOLDER_ID is required.")
+        self.session = AuthorizedSession(credentials())
 
     def request(self, method, url, **kwargs):
         response = self.session.request(method, url, timeout=120, **kwargs)
@@ -154,40 +160,6 @@ class DrivePublisher:
         speaker_mode="",
     ):
         route = resolve_learning_route(language=language, skill=skill, level=level)
-        if self.bridge_url:
-            payload = {
-                "action": "save-gemini-lesson-audio",
-                "audioBase64": base64.b64encode(Path(mp3_path).read_bytes()).decode("ascii"),
-                "mimeType": "audio/mpeg",
-                "date": date,
-                "time": time,
-                "fileName": f"lesson_{date}_{time}.mp3",
-                "language": route.language_code,
-                "languageLabel": route.language,
-                "skill": route.skill,
-                "level": route.level,
-                "type": content_type,
-                "route": "/".join((*route.parts, date)),
-                "lesson": {
-                    "text": text,
-                    "title": title,
-                    "topic": topic,
-                    "delivery_mode": delivery_mode,
-                    "speaker_mode": speaker_mode,
-                },
-            }
-            req = Request(
-                self.bridge_url,
-                data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            with urlopen(req, timeout=120) as response:
-                result = json.loads(response.read().decode("utf-8"))
-            if result.get("status") != "success":
-                raise RuntimeError(f"Drive bridge failed: {result}")
-            return result
-
         content_folder = self.ensure_path(*route.parts, date)
         filename = f"lesson_{date}_{time}.mp3"
         audio = self.upload_file(mp3_path, content_folder["id"], filename, "audio/mpeg")
