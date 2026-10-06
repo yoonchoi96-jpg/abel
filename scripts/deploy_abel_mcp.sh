@@ -16,8 +16,8 @@ PROJECT="${PROJECT:-$(gcloud config get-value project 2>/dev/null)}"
   exit 1
 }
 
-[ -n "${ABEL_DRIVE_FOLDER_ID:-}" ] || {
-  echo "ERROR: ABEL_DRIVE_FOLDER_ID is required."
+[ -n "${ABEL_DRIVE_BRIDGE_URL:-}" ] || [ -n "${ABEL_DRIVE_FOLDER_ID:-}" ] || {
+  echo "ERROR: ABEL_DRIVE_BRIDGE_URL or ABEL_DRIVE_FOLDER_ID is required."
   exit 1
 }
 
@@ -26,7 +26,10 @@ PROJECT="${PROJECT:-$(gcloud config get-value project 2>/dev/null)}"
   exit 1
 }
 
-ENV_VARS="ABEL_DRIVE_FOLDER_ID=${ABEL_DRIVE_FOLDER_ID},GEMINI_API_KEY=${GEMINI_API_KEY},GEMINI_TTS_MODEL=${GEMINI_TTS_MODEL:-gemini-3.8-flash-tts},GEMINI_TTS_VOICE=${GEMINI_TTS_VOICE:-Kore}"
+ENV_VARS="ABEL_DRIVE_FOLDER_ID=${ABEL_DRIVE_FOLDER_ID:-},GEMINI_API_KEY=${GEMINI_API_KEY},GEMINI_TTS_MODEL=${GEMINI_TTS_MODEL:-gemini-3.8-flash-tts},GEMINI_TTS_VOICE=${GEMINI_TTS_VOICE:-Kore}"
+if [ -n "${ABEL_DRIVE_BRIDGE_URL:-}" ]; then
+  ENV_VARS="$ENV_VARS,ABEL_DRIVE_BRIDGE_URL=$ABEL_DRIVE_BRIDGE_URL"
+fi
 if [ -n "${MCP_AUTH_TOKEN:-}" ]; then
   ENV_VARS="$ENV_VARS,MCP_AUTH_TOKEN=$MCP_AUTH_TOKEN"
 fi
