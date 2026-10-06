@@ -1,10 +1,6 @@
 name: Abel Gemini TTS → Routed Learning Drive
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/abel-gemini-drive-tts.yml"
   workflow_dispatch:
     inputs:
       prompt:
@@ -37,7 +33,6 @@ on:
 
 jobs:
   generate-and-publish:
-    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'Run Abel TTS integration test') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -90,12 +85,6 @@ jobs:
           LESSON_TITLE: ${{ inputs.title }}
           LESSON_TOPIC: ${{ inputs.topic }}
         run: |
-          PROMPT="${LESSON_PROMPT:-Create a short HSK6 Chinese listening practice lesson for a Drive integration test.}"
-          LANGUAGE="${LESSON_LANGUAGE:-zh-CN}"
-          SKILL="${LESSON_SKILL:-listening}"
-          LEVEL="${LESSON_LEVEL:-HSK6}"
-          TITLE="${LESSON_TITLE:-Abel OAuth Drive Integration Test}"
-          TOPIC="${LESSON_TOPIC:-OAuth Drive upload test}"
           python scripts/gemini_audio_executor.py \
-            "$PROMPT" \
-            "Use these canonical learning metadata values: language=$LANGUAGE, skill=$SKILL, level=$LEVEL, title=$TITLE, topic=$TOPIC. When calling generate_lesson_audio, pass these exact values in the language, skill, level, title, and topic fields."
+            "$LESSON_PROMPT" \
+            "Use these canonical learning metadata values: language=$LESSON_LANGUAGE, skill=$LESSON_SKILL, level=$LESSON_LEVEL, title=$LESSON_TITLE, topic=$LESSON_TOPIC. When calling generate_lesson_audio, pass these exact values in the language, skill, level, title, and topic fields."
