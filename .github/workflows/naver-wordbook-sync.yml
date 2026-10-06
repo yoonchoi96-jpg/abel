@@ -1,32 +1,35 @@
-name: Naver Wordbook Sync
+name: Naver Wordbook Sync (legacy self-hosted)
 
 on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Run mode
+        description: Legacy fallback mode
         required: true
-        default: sync
+        default: probe
         type: choice
         options:
-          - sync
           - probe
-  schedule:
-    - cron: "0 22 * * *"
-    - cron: "0 10 * * *"
+          - sync
 
 permissions:
   contents: write
 
 concurrency:
-  group: naver-wordbook-sync
+  group: naver-wordbook-sync-legacy
   cancel-in-progress: false
 
 jobs:
   sync:
     runs-on: [self-hosted, macOS, naver-wordbook]
+    timeout-minutes: 20
 
     steps:
+      - name: Legacy self-hosted fallback
+        run: |
+          echo "::warning::This is a legacy fallback workflow. Prefer 'Naver Wordbook Sync (GitHub-hosted)'."
+          echo "The self-hosted Mac runner is intentionally manual-only."
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -45,14 +48,10 @@ jobs:
           NAVER_WORDBOOK_EXPORT: data/naver_wordbook.json
           NAVER_BROWSER: chrome
         run: |
-          MODE="sync"
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            MODE="${{ inputs.mode }}"
-          fi
-          python scripts/naver_wordbook_sync.py --"$MODE"
+          python scripts/naver_wordbook_sync.py --${{ inputs.mode }}
 
       - name: Commit canonical export
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.mode == 'sync' }}
+        if: ${{ inputs.mode == 'sync' }}
         run: |
           git config user.name "abel-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -61,5 +60,5 @@ jobs:
             echo "No wordbook changes."
             exit 0
           fi
-          git commit -m "chore: sync NAVER wordbook"
+          git commit -m "chore: legacy NAVER wordbook sync"
           git push
