@@ -50,7 +50,7 @@ def prepare_chinese_writing_correction(
     context: str = "",
     known_words_json: str = "[]",
 ) -> dict:
-    """Prepare a cached, machine-readable Chinese writing correction request.
+    """READ-ONLY: prepare a cached, machine-readable Chinese writing correction request.
 
     The tool deliberately returns a model-ready contract instead of silently
     inventing linguistic judgments. A Gemini/Gem education layer can execute the
@@ -80,7 +80,7 @@ def validate_chinese_writing_correction(
     original: str,
     result_json: str,
 ) -> dict:
-    """Validate a model-produced Abel writing-correction JSON contract."""
+    """READ-ONLY: validate a model-produced Abel writing-correction JSON contract."""
     try:
         result = json.loads(result_json)
     except json.JSONDecodeError as exc:
@@ -104,7 +104,7 @@ def prepare_multilingual_writing_correction(
     context: str = "",
     known_words_json: str = "[]",
 ) -> dict:
-    """Prepare a language-agnostic writing correction request for Gemini."""
+    """READ-ONLY: prepare a language-agnostic writing correction request for Gemini."""
     try:
         known_words = json.loads(known_words_json or "[]")
     except json.JSONDecodeError as exc:
@@ -125,7 +125,7 @@ def validate_multilingual_writing_correction(
     original: str,
     result_json: str,
 ) -> dict:
-    """Validate a multilingual writing-correction JSON contract."""
+    """READ-ONLY: validate a multilingual writing-correction JSON contract."""
     try:
         result = json.loads(result_json)
     except json.JSONDecodeError as exc:
@@ -143,7 +143,7 @@ def validate_multilingual_writing_correction(
 def get_learning_history_summary(
     language: str = "zh-CN",
 ) -> dict:
-    """Return the latest language-specific Abel learning snapshot for Gemini.
+    """READ-ONLY: return the latest language-specific Abel learning snapshot for Gemini.
 
     Snapshot files are immutable-style exports and are safer for Cloud Run than
     relying on an ephemeral container SQLite database.
@@ -181,6 +181,25 @@ def get_learning_history_summary(
 
 
 @mcp.tool()
+def get_education_context(language: str = "zh-CN") -> dict:
+    """READ-ONLY: return one compact education context bundle for Gemini Spark.
+
+    This composite tool is intended for normal tutoring sessions. It performs no
+    external writes and avoids requiring Spark to call multiple context tools when
+    it only needs the current learning state.
+    """
+    history = get_learning_history_summary(language)
+    return {
+        "status": history.get("status", "error"),
+        "language": language,
+        "learning_history": history,
+        "write_actions": {
+            "generate_lesson_audio": "Only call when the user explicitly asks to generate or save lesson audio."
+        },
+    }
+
+
+@mcp.tool()
 def generate_lesson_audio(
     text: str,
     title: str = "",
@@ -191,7 +210,9 @@ def generate_lesson_audio(
     speaker_mode: str = "single",
     skill: str = "listening",
 ) -> dict:
-    """Generate a routed lesson MP3 and save it directly to Google Drive.
+    """WRITE ACTION: generate a routed lesson MP3 and save it directly to Google Drive.
+
+    Only call this tool when the user explicitly requests audio generation or Drive storage. Do not call it for ordinary learning, explanation, correction, practice, or analysis.
 
     The current production route is zh-CN -> Gemini TTS. Unsupported language or
     speaker routes fail closed instead of silently using the wrong configuration.
@@ -257,7 +278,7 @@ def evaluate_hsk_content(
     expected_total: int = 0,
     expected_distribution_json: str = "",
 ) -> dict:
-    """Run Abel's deterministic HSK exam QA and return the semantic-review prompt.
+    """READ-ONLY: run Abel's deterministic HSK exam QA and return the semantic-review prompt.
 
     questions_json must be a JSON array of question objects. Deterministic checks cover
     answer distribution, repeated answer runs, option-length/shape leakage, extreme-word
@@ -340,7 +361,7 @@ def finalize_hsk_review(
     deterministic_report_json: str,
     semantic_review_json: str = "",
 ) -> dict:
-    """Apply Abel's final release gate to deterministic and Gemini semantic QA results.
+    """READ-ONLY: apply Abel's final release gate to deterministic and Gemini semantic QA results.
 
     If semantic_review_json is omitted, the result stays in REVIEW/NOT_RUN rather
     than falsely passing. This keeps model-based review explicit and auditable.
