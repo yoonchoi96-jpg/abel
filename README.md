@@ -4,7 +4,9 @@ Abel is the Naver Dictionary personal wordbook sync system.
 
 ## Core design
 
-**Naver authenticated browser session → Playwright/Chrome on Mac → raw snapshots + normalized SQLite → GitHub JSON export → Obsidian**
+**Authenticated Naver session → Playwright storage state → GitHub-hosted Ubuntu runner → raw snapshots + normalized SQLite → GitHub JSON export → downstream learning tools**
+
+The canonical Naver sync path is now the GitHub-hosted workflow. The former Mac self-hosted runner is retained only as a manual legacy fallback.
 
 Abel also maintains two curated HSK 3.0 collections in the same SQLite database: **Level 6 new vocabulary (1,140)** and the combined **Level 7–9 advanced band (5,600)**.
 
@@ -30,9 +32,15 @@ HSK numbered Naver volumes are grouped: `신HSK_5급 필수단어 1~5탄` → `�
 - `scripts/hsk30_sync.py`: imports both collections into the same SQLite schema.
 - `.github/workflows/hsk30-sync.yml`: scheduled daily at 07:00 KST.
 
-## Browser
+## Browser / authentication
 
-Abel uses a dedicated persistent browser profile, not the user's everyday Chrome profile. `NAVER_BROWSER=chrome` is the default; Chromium remains available as a fallback.
+Abel never stores the Naver password.
+
+The hosted runner is ephemeral, so the authenticated browser session is supplied as the GitHub repository secret `NAVER_STORAGE_STATE_B64`, containing Playwright storage state exported from an already-authenticated Naver browser session. The secret must never be committed or printed.
+
+The Mac self-hosted runner and local persistent browser profile remain available only for manual recovery/bootstrap:
+- `~/.naver_wordbook/browser_profile`
+- `.github/workflows/naver-wordbook-sync.yml` (legacy/manual)
 
 ## Commands
 
@@ -42,8 +50,10 @@ python scripts/naver_wordbook_sync.py --probe
 python scripts/naver_wordbook_sync.py --sync
 ```
 
+For GitHub-hosted operation, use `.github/workflows/naver-wordbook-sync-hosted.yml` with `sync` or `probe`. The hosted workflow validates `NAVER_STORAGE_STATE_B64` before starting the collector.
+
 ## Security
 
-The Naver password is never stored by Abel. The authenticated browser profile stays on the Mac and must never be committed.
+Never commit browser profiles, cookies, storage-state exports, or raw authentication material.
 
-GitHub Actions uses a self-hosted Mac runner because the authenticated browser state is local.
+If the Naver session expires, refresh the authenticated browser session and replace `NAVER_STORAGE_STATE_B64` rather than falling back to storing a password.
