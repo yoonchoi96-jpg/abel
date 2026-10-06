@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse, json, os
+import argparse, base64, json, os
 from datetime import datetime
 from pathlib import Path
+from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 from google.auth.transport.requests import AuthorizedSession
 from google.oauth2 import service_account
@@ -46,10 +47,11 @@ def credentials():
 
 class DrivePublisher:
     def __init__(self, root_folder_id: str):
-        if not root_folder_id:
-            raise RuntimeError("ABEL_DRIVE_FOLDER_ID is required.")
+        self.bridge_url = os.getenv("ABEL_DRIVE_BRIDGE_URL", "").strip()
         self.root_folder_id = root_folder_id
-        self.session = AuthorizedSession(credentials())
+        self.session = None if self.bridge_url else AuthorizedSession(credentials())
+        if not self.bridge_url and not root_folder_id:
+            raise RuntimeError("ABEL_DRIVE_BRIDGE_URL or ABEL_DRIVE_FOLDER_ID is required.")
 
     def request(self, method, url, **kwargs):
         response = self.session.request(method, url, timeout=120, **kwargs)
@@ -152,6 +154,40 @@ class DrivePublisher:
         speaker_mode="",
     ):
         route = resolve_learning_route(language=language, skill=skill, level=level)
+        if self.bridge_url:
+            payload = {
+                "action": "save-gemini-lesson-audio",
+                "audioBase64": base64.b64encode(Path(mp3_path).read_bytes()).decode("ascii"),
+                "mimeType": "audio/mpeg",
+                "date": date,
+                "time": time,
+                "fileName": f"lesson_{date}_{time}.mp3",
+                "language": route.language_code,
+                "languageLabel": route.language,
+                "skill": route.skill,
+                "level": route.level,
+                "type": content_type,
+                "route": "/".join((*route.parts, date)),
+                "lesson": {
+                    "text": text,
+                    "title": title,
+                    "topic": topic,
+                    "delivery_mode": delivery_mode,
+                    "speaker_mode": speaker_mode,
+                },
+            }
+            req = Request(
+                self.bridge_url,
+                data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urlopen(req, timeout=120) as response:
+                result = json.loads(response.read().decode("utf-8"))
+            if result.get("status") != "success":
+                raise RuntimeError(f"Drive bridge failed: {result}")
+            return result
+
         content_folder = self.ensure_path(*route.parts, date)
         filename = f"lesson_{date}_{time}.mp3"
         audio = self.upload_file(mp3_path, content_folder["id"], filename, "audio/mpeg")
