@@ -189,6 +189,7 @@ def generate_lesson_audio(
     language: str = "zh-CN",
     delivery_mode: str = "casual_explanation",
     speaker_mode: str = "single",
+    skill: str = "listening",
 ) -> dict:
     """Generate a routed lesson MP3 and save it directly to Google Drive.
 
@@ -228,6 +229,8 @@ def generate_lesson_audio(
             }
 
         try:
+            if os.getenv("ABEL_REQUIRE_DRIVE_BRIDGE", "").strip().lower() == "true" and not os.getenv("ABEL_DRIVE_BRIDGE_URL", "").strip():
+                return {"status": "error", "stage": "google_drive", "message": "ABEL_DRIVE_BRIDGE_URL is required in production."}
             publisher = DrivePublisher(os.getenv("ABEL_DRIVE_FOLDER_ID", ""))
             return publisher.publish_lesson(
                 mp3_path,
@@ -237,6 +240,8 @@ def generate_lesson_audio(
                 level=level,
                 topic=topic,
                 text=text,
+                language=language,
+                skill=skill,
             )
         except Exception as exc:
             return {
