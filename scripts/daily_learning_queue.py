@@ -53,6 +53,58 @@ def build_queue(language: str, db_path: str | Path, limit: int = 20, days: int =
            ORDER BY wrong_count DESC, last_seen DESC, question_id""",
         (language, cutoff),
     ).fetchall()
+
+    candidates = []
+    seen = set()
+    for r in rows:
+        if not r["resource_id"]:
+            continue
+        key = (str(r["question_id"]), str(r["resource_id"]))
+        seen.add(key)
+        candidates.append({
+            "question_id": r["question_id"],
+            "resource_id": r["resource_id"],
+            "kind": r["kind"],
+            "level": r["level"],
+            "error_type": r["error_type"],
+            "wrong_count": int(r["wrong_count"]),
+            "last_seen": r["last_seen"],
+            "priority": _priority(int(r["wrong_count"]), r["last_seen"], r["error_type"]),
+        })
+
+    # Resurface due items from the spaced-review state as well as recent errors.
+    # review_states is created only after a source-backed question is attempted.
+    review_rows = con.execute(
+        """SELECT rs.*, pe.error_type AS latest_error_type
+           FROM review_states rs
+           LEFT JOIN practice_errors pe
+             ON pe.id = (
+               SELECT MAX(pe2.id) FROM practice_errors pe2
+               WHERE pe2.language=rs.language
+                 AND pe2.question_id=rs.question_id
+                 AND pe2.resource_id=rs.resource_id
+             )
+           WHERE rs.language=? AND rs.status="active" AND rs.next_review_at<=?
+           ORDER BY rs.next_review_at ASC, rs.wrong_count DESC, rs.question_id ASC""",
+        (language, datetime.now(timezone.utc).isoformat()),
+    ).fetchall()
+
+    for r in review_rows:
+        key = (str(r["question_id"]), str(r["resource_id"]))
+        if not r["resource_id"] or key in seen:
+            continue
+        seen.add(key)
+        error_type = r["latest_error_type"]
+        candidates.append({
+            "question_id": r["question_id"],
+            "resource_id": r["resource_id"],
+            "kind": r["kind"],
+            "level": r["level"],
+            "error_type": error_type,
+            "wrong_count": int(r["wrong_count"]),
+            "last_seen": r["last_seen"],
+            "priority": _priority(int(r["wrong_count"]), r["last_seen"], error_type) + 0.5,
+        })
     con.close()
 
     candidates = []
