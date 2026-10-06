@@ -22,6 +22,7 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -38,21 +39,21 @@ jobs:
           pip install -r requirements.txt
           python -m playwright install --with-deps chromium
 
-      - name: Restore authenticated Naver session
+      - name: Validate authenticated Naver session
         env:
           NAVER_STORAGE_STATE_B64: ${{ secrets.NAVER_STORAGE_STATE_B64 }}
         run: |
           test -n "$NAVER_STORAGE_STATE_B64" || {
             echo "::error::Missing NAVER_STORAGE_STATE_B64 repository secret."
-            echo "Create it once from the authenticated Mac profile using scripts/export_naver_storage_state.py."
+            echo "Provision the secret from an authenticated Naver browser session before running this workflow."
             exit 1
           }
           python3 - <<'PY'
-import base64, os
-raw = base64.b64decode(os.environ["NAVER_STORAGE_STATE_B64"])
-# Validate before the sync starts; the actual collector receives the same secret.
-import json
-json.loads(raw.decode("utf-8"))
+import base64, json, os
+raw = base64.b64decode(os.environ["NAVER_STORAGE_STATE_B64"], validate=True)
+state = json.loads(raw.decode("utf-8"))
+if not isinstance(state, dict) or "cookies" not in state:
+    raise SystemExit("Invalid Playwright storage state.")
 print(f"Validated Naver storage state ({len(raw)} bytes).")
 PY
 
@@ -69,7 +70,7 @@ PY
           python scripts/naver_wordbook_sync.py --"$MODE"
 
       - name: Commit canonical export
-        if: ${{ inputs.mode == 'sync' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'sync' }}
         run: |
           git config user.name "abel-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
