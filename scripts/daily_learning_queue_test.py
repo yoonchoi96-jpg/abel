@@ -57,3 +57,19 @@ def test_queue_excludes_missing_resource(tmp_path):
     con.commit(); con.close()
     out = build_queue("zh-CN", db)
     assert out["item_count"] == 0
+
+
+def test_queue_includes_due_spaced_review_items(tmp_path):
+    db = tmp_path / "learning.db"
+    from review_state_engine import connect, apply_result
+    con = connect(db)
+    con.close()
+    apply_result(
+        "zh-CN", "q1", "r1", True, kind="reading", level="HSK6",
+        at="2026-10-01T00:00:00+00:00", db_path=db
+    )
+    out = build_queue("zh-CN", db, limit=10, days=30)
+    assert out["item_count"] == 1
+    assert out["items"][0]["question_id"] == "q1"
+    assert out["rules"]["errors_only"] is False
+    assert out["rules"]["spaced_review_due"] is True
