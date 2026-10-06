@@ -1,0 +1,40 @@
+name: Abel Gemini TTS Routed Test
+
+on:
+  push:
+    paths:
+      - ".github/workflows/abel-gemini-drive-tts-test.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Abel
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Verify Drive access
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          ABEL_DRIVE_FOLDER_ID: ${{ secrets.ABEL_DRIVE_FOLDER_ID }}
+        run: python scripts/drive_audio_uploader.py --self-test
+      - name: Generate and publish test lesson
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          ABEL_DRIVE_FOLDER_ID: ${{ secrets.ABEL_DRIVE_FOLDER_ID }}
+          GEMINI_MODEL: "gemini-3.8-flash"
+          GEMINI_TTS_MODEL: "gemini-3.8-flash-tts"
+          GEMINI_TTS_VOICE: "Kore"
+        run: |
+          python scripts/gemini_audio_executor.py             "HSK6 수준의 중국어 듣기 연습을 만들어줘. 대만 카페에서 주문하는 상황을 소재로 자연스러운 중국어 대화와 핵심 어휘를 포함해줘."             --title "HSK6 Taiwan Cafe Listening Test"             --language "zh-CN"             --skill "listening"             --level "HSK6"             --topic "Taiwan cafe ordering"
