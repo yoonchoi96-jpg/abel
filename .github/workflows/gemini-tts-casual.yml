@@ -49,23 +49,14 @@ jobs:
           file gemini_tts_hsk6_casual.mp3
           ls -lh gemini_tts_hsk6_casual.mp3
 
-      - name: Publish MP3 to Chinese Drive
-        env:
-          ABEL_DRIVE_FOLDER_ID: ${{ secrets.ABEL_DRIVE_FOLDER_ID || '1un78ru9F32LCWMY9EDbt8hDPcrP2KHzU' }}
-          GEMINI_TTS_MODEL: "gemini-3.8-flash-tts"
-          GEMINI_TTS_VOICE: "Kore"
+      - name: Verify MP3
         run: |
-          python scripts/drive_audio_uploader.py \
-            --file gemini_tts_hsk6_casual.mp3 \
-            --date "$(date -u +%Y-%m-%d)" \
-            --time "$(date -u +%H%M%S)" \
-            --title "Abel Gemini TTS canonical smoke test" \
-            --level "HSK6" \
-            --topic "Deep-sea floating offshore wind power" \
-            --text "Canonical Abel Gemini TTS production smoke test."
+          test -s gemini_tts_hsk6_casual.mp3
+          file gemini_tts_hsk6_casual.mp3
+          ls -lh gemini_tts_hsk6_casual.mp3
 
       - uses: actions/upload-artifact@v4
         with:
-          name: abel-canonical-gemini-tts-hsk6-casual
+          name: abel-experimental-gemini-tts-hsk6-casual
           path: gemini_tts_hsk6_casual.mp3
           retention-days: 7
