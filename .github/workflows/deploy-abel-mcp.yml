@@ -49,13 +49,19 @@ jobs:
 
       - name: Deploy Abel MCP to Cloud Run
         env:
-          ABEL_DRIVE_BRIDGE_URL: ${{ vars.ABEL_DRIVE_BRIDGE_URL }}
+          ABEL_DRIVE_FOLDER_ID: ${{ secrets.ABEL_DRIVE_FOLDER_ID }}
+          GOOGLE_DRIVE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_OAUTH_CLIENT_ID }}
+          GOOGLE_DRIVE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           MCP_AUTH_TOKEN: ${{ secrets.MCP_AUTH_TOKEN }}
         run: |
           set -euo pipefail
+          test -n "$ABEL_DRIVE_FOLDER_ID"
+          test -n "$GOOGLE_DRIVE_OAUTH_CLIENT_ID"
+          test -n "$GOOGLE_DRIVE_OAUTH_CLIENT_SECRET"
+          test -n "$GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN"
           test -n "$GEMINI_API_KEY"
-          test -n "$ABEL_DRIVE_BRIDGE_URL"
           chmod +x scripts/deploy_abel_mcp.sh
           ./scripts/deploy_abel_mcp.sh
 
