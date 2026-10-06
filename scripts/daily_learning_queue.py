@@ -183,7 +183,8 @@ def build_queue(language: str, db_path: str | Path, limit: int = 20, days: int =
         "rules": {
             "source_backed_only": True,
             "no_invented_questions": True,
-            "errors_only": True,
+            "errors_only": False,
+            "spaced_review_due": True,
             "deterministic_order": True,
         },
         "items": queue,
