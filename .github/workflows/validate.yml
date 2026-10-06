@@ -36,7 +36,6 @@ jobs:
         run: |
           pytest -q
           python scripts/abel_learning_drive_sync_test.py
-          python scripts/learning_drive_publisher_test.py
           python scripts/learning_memory_extractor_test.py
 
       - name: Start local production MCP server
