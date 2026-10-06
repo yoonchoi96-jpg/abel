@@ -1,4 +1,4 @@
-name: Abel Gemini TTS → Google Drive
+name: Abel Gemini TTS → Routed Learning Drive
 
 on:
   workflow_dispatch:
@@ -10,6 +10,16 @@ on:
       title:
         description: "Optional lesson title"
         required: false
+        type: string
+      language:
+        description: "Learning language code/name (e.g. zh-CN, es, fr)"
+        required: false
+        default: "zh-CN"
+        type: string
+      skill:
+        description: "Learning skill"
+        required: false
+        default: "listening"
         type: string
       level:
         description: "Lesson level"
