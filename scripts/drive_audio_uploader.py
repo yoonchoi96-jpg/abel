@@ -6,6 +6,11 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 from google.auth.transport.requests import AuthorizedSession
 from google.oauth2 import service_account
+
+try:
+    from learning_router import resolve_learning_route
+except ModuleNotFoundError:
+    from scripts.learning_router import resolve_learning_route
 from google.auth import default as google_auth_default
 
 DRIVE_SCOPE = "https://www.googleapis.com/auth/drive"
@@ -130,38 +135,69 @@ class DrivePublisher:
         finally:
             tmp.unlink(missing_ok=True)
 
-    def publish_lesson(self, mp3_path, *, date, time, title="", level="", topic="", text=""):
-        audio_folder = self.ensure_path("AUDIO", date)
+    def publish_lesson(
+        self,
+        mp3_path,
+        *,
+        date,
+        time,
+        title="",
+        level="",
+        topic="",
+        text="",
+        language="zh-CN",
+        skill="listening",
+        content_type="audio_lesson",
+        delivery_mode="",
+        speaker_mode="",
+    ):
+        route = resolve_learning_route(language=language, skill=skill, level=level)
+        content_folder = self.ensure_path(*route.parts, date)
         filename = f"lesson_{date}_{time}.mp3"
-        audio = self.upload_file(mp3_path, audio_folder["id"], filename, "audio/mpeg")
+        audio = self.upload_file(mp3_path, content_folder["id"], filename, "audio/mpeg")
+        file_url = audio.get("webViewLink") or f"https://drive.google.com/file/d/{audio.get('id')}/view"
 
-        outbox_folder = self.ensure_path("OUTBOX")
         record = {
             "status": "success",
             "provider": "gemini",
-            "language": "zh-CN",
-            "model": os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-tts"),
-            "voice": os.getenv("GEMINI_TTS_VOICE", "Kore"),
+            "language": route.language_code,
+            "languageLabel": route.language,
+            "skill": route.skill,
+            "level": route.level,
+            "type": content_type,
+            "source": "Abel",
             "createdAt": datetime.now(KST).isoformat(),
             "session": {"date": date, "time": time},
-            "lesson": {"text": text, "title": title, "level": level, "topic": topic},
+            "lesson": {
+                "text": text,
+                "title": title,
+                "topic": topic,
+                "delivery_mode": delivery_mode,
+                "speaker_mode": speaker_mode,
+            },
+            "route": {"path": "/".join((*route.parts, date))},
             "audio": {
                 "fileId": audio.get("id"),
                 "fileName": audio.get("name", filename),
-                "fileUrl": audio.get("webViewLink") or f"https://drive.google.com/file/d/{audio.get('id')}/view",
+                "fileUrl": file_url,
             },
         }
+
         self.upload_bytes(
             json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8"),
-            outbox_folder["id"], f"lesson_{date}_{time}.json", "application/json",
+            content_folder["id"], f"lesson_{date}_{time}.json", "application/json",
         )
 
-        log_folder = self.ensure_path("LOG")
+        log_folder = self.ensure_path("_SYSTEM", "LOG")
         self.upload_bytes(
             json.dumps({
                 "timestamp": datetime.now(KST).isoformat(),
                 "session": f"{date}_{time}",
                 "status": "SUCCESS_GEMINI_TTS",
+                "language": route.language_code,
+                "skill": route.skill,
+                "level": route.level,
+                "path": "/".join((*route.parts, date)),
                 "fileId": audio.get("id"),
             }, ensure_ascii=False, indent=2).encode("utf-8"),
             log_folder["id"], f"generation_{date}_{time}.json", "application/json",
@@ -170,14 +206,15 @@ class DrivePublisher:
         return {
             "status": "success",
             "provider": "gemini",
-            "language": "zh-CN",
-            "model": os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-tts"),
-            "voice": os.getenv("GEMINI_TTS_VOICE", "Kore"),
+            "language": route.language_code,
+            "skill": route.skill,
+            "level": route.level,
+            "route": "/".join((*route.parts, date)),
             "cached": False,
             "fileId": audio.get("id"),
-            "fileUrl": record["audio"]["fileUrl"],
+            "fileUrl": file_url,
             "fileName": filename,
-            "message": "Gemini TTS MP3 generated and saved directly to Google Drive.",
+            "message": "Gemini TTS MP3 and manifest saved to the routed Abel Learning path.",
         }
 
 def main():
@@ -190,6 +227,8 @@ def main():
     parser.add_argument("--level", default="HSK6")
     parser.add_argument("--topic", default="")
     parser.add_argument("--text", default="")
+    parser.add_argument("--language", default="zh-CN")
+    parser.add_argument("--skill", default="listening")
     args = parser.parse_args()
 
     publisher = DrivePublisher(os.getenv("ABEL_DRIVE_FOLDER_ID", ""))
