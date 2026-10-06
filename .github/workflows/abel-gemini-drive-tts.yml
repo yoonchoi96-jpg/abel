@@ -78,5 +78,7 @@ jobs:
           python scripts/gemini_audio_executor.py \
             "${{ inputs.prompt }}" \
             --title "${{ inputs.title }}" \
+            --language "${{ inputs.language }}" \
+            --skill "${{ inputs.skill }}" \
             --level "${{ inputs.level }}" \
             --topic "${{ inputs.topic }}"
