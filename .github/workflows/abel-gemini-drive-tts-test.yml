@@ -37,6 +37,6 @@ jobs:
           GEMINI_TTS_MODEL: "gemini-3.8-flash-tts"
           GEMINI_TTS_VOICE: "Kore"
         run: |
-          python scripts/gemini_audio_executor.py             "HSK6 수준의 중국어 듣기 연습을 만들어줘. 대만 카페에서 주문하는 상황을 소재로 자연스러운 중국어 대화와 핵심 어휘를 포함해줘."             --title "HSK6 Taiwan Cafe Listening Test"             --language "zh-CN"             --skill "listening"             --level "HSK6"             --topic "Taiwan cafe ordering"
+          python scripts/gemini_audio_executor.py "HSK6 수준의 중국어 듣기 연습을 만들어줘. 대만 카페에서 주문하는 상황을 소재로 자연스러운 중국어 대화와 핵심 어휘를 포함해줘. Use these canonical learning metadata values: language=zh-CN, skill=listening, level=HSK6, title=HSK6 Taiwan Cafe Listening Test, topic=Taiwan cafe ordering. When calling generate_lesson_audio, pass these exact values in the language, skill, level, title, and topic fields."
 
 # trigger test rerun
