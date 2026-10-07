@@ -54,7 +54,7 @@ def candidate_files(directories: list[Path], max_depth: int = 3) -> list[Path]:
         for path in directory.rglob("*"):
             if not path.is_file() or path.suffix.lower() not in allowed:
                 continue
-            if len(path.parts) - base_depth > max_depth:
+            if len(path.parts) - base_depth - 1 > max_depth:
                 continue
             if is_hanping_path(path) or any(
                 "hanping" in part.lower()
