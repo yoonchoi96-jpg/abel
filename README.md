@@ -83,13 +83,37 @@ The normalizer accepts JSON, CSV, TSV, and plain text. The normalized snapshot i
 
 Hanping account authentication, OTP handling, cookies, browser-session capture, and private cloud decryption are deliberately outside Abel.
 
-## Naver data boundary
+## Naver wordbook sync
 
-Abel intentionally does not automate access to the user's Naver account. It does not use GitHub Actions, a self-hosted runner, Playwright login, stored Naver sessions, or `NAVER_STORAGE_STATE_B64` to access the account.
+Naver remains the primary vocabulary capture UI for Abel.
 
-The canonical repository input is `data/naver_wordbook.json`. Any future Naver-side collection must use a user-controlled and explicitly permitted mechanism, then import the resulting data into Abel.
+The production flow is:
 
-Never put Naver passwords, cookies, storage state, or browser profiles in GitHub or GitHub Secrets.
+```text
+Naver 중국어 개인 단어장
+  ↓ authenticated Chrome session on the user's Mac
+scripts/naver_wordbook_sync.py
+  ↓
+SQLite + raw snapshots
+  ↓
+data/naver_wordbook.json
+  ↓
+Obsidian / downstream learning tools
+```
+
+The collector preserves multiple wordbooks as first-class collections, globally deduplicates words, and keeps many-to-many wordbook membership. HSK numbered Naver volumes are grouped into `신HSK 5급` and `신HSK 6급`.
+
+### Commands
+
+```bash
+python scripts/naver_wordbook_sync.py --bootstrap
+python scripts/naver_wordbook_sync.py --probe
+python scripts/naver_wordbook_sync.py --sync
+```
+
+The authenticated browser profile stays on the user's Mac under `~/.naver_wordbook/browser_profile`. It is never committed to GitHub.
+
+The scheduled workflow runs on the self-hosted Mac runner labeled `self-hosted`, `macOS`, and `naver-wordbook`.
 
 ## Security
 
