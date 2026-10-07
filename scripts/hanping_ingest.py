@@ -12,7 +12,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from hanping_vocab_import import merge, parse_file
+try:
+    from scripts.hanping_vocab_import import merge, parse_file
+except ModuleNotFoundError:  # direct execution: python scripts/hanping_ingest.py
+    from hanping_vocab_import import merge, parse_file
 
 
 ROOT = Path(__file__).resolve().parents[1]
