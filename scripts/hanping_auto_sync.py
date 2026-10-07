@@ -39,13 +39,27 @@ def save_state(state: dict) -> None:
 def is_hanping_path(path: Path) -> bool:
     return "hanping" in f"{path.name} {path.parent.name}".lower()
 
-def candidate_files(directories: list[Path]) -> list[Path]:
+def candidate_files(directories: list[Path], max_depth: int = 3) -> list[Path]:
+    """Find Hanping exports without recursively crawling an entire home tree.
+
+    A small bounded depth handles exports nested under iCloud/Downloads/Hanping
+    folders while avoiding an unbounded scan of Documents or Downloads.
+    """
     out = []
+    allowed = {".json", ".csv", ".tsv", ".txt"}
     for directory in directories:
         if not directory.is_dir():
             continue
-        for path in directory.iterdir():
-            if path.is_file() and path.suffix.lower() in {".json", ".csv", ".tsv", ".txt"} and is_hanping_path(path):
+        base_depth = len(directory.parts)
+        for path in directory.rglob("*"):
+            if not path.is_file() or path.suffix.lower() not in allowed:
+                continue
+            if len(path.parts) - base_depth > max_depth:
+                continue
+            if is_hanping_path(path) or any(
+                "hanping" in part.lower()
+                for part in path.relative_to(directory).parts[:-1]
+            ):
                 out.append(path)
     return sorted(set(out), key=lambda p: p.stat().st_mtime)
 
