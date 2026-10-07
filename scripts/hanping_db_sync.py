@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import sqlite3
 from pathlib import Path
 
-from abel_wordbook_db import DB_PATH, init_db, now_iso
+try:
+    from scripts.abel_wordbook_db import DB_PATH, init_db, now_iso
+except ModuleNotFoundError:
+    from abel_wordbook_db import DB_PATH, init_db, now_iso
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT = ROOT / "data" / "hanping" / "normalized.json"
@@ -60,7 +64,6 @@ def sync(path: Path = DEFAULT_INPUT) -> dict[str, int]:
     now = now_iso()
     inserted = updated = 0
 
-    import sqlite3
     with sqlite3.connect(DB_PATH) as db:
         db.execute("PRAGMA foreign_keys=ON")
         row = db.execute(
@@ -74,7 +77,13 @@ def sync(path: Path = DEFAULT_INPUT) -> dict[str, int]:
             db.execute(
                 """INSERT INTO wordbooks(naver_id,name,source_url,first_seen,last_seen,raw_json)
                    VALUES(NULL,?,?,?,?,?)""",
-                (HANPING_BOOK, now, now, now, json.dumps({"source": "hanping"}, ensure_ascii=False)),
+                (
+                    HANPING_BOOK,
+                    "hanping",
+                    now,
+                    now,
+                    json.dumps({"source": "hanping"}, ensure_ascii=False),
+                ),
             )
             book_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
 
@@ -127,9 +136,7 @@ def sync(path: Path = DEFAULT_INPUT) -> dict[str, int]:
                 (word_id, traditional, starred, note, item["record_hash"], now, now, raw),
             )
 
-            db.execute(
-                "DELETE FROM hanping_vocab_tags WHERE word_id=?", (word_id,)
-            )
+            db.execute("DELETE FROM hanping_vocab_tags WHERE word_id=?", (word_id,))
             for tag in sorted(set(item.get("tags") or [])):
                 db.execute("INSERT OR IGNORE INTO hanping_tags(name) VALUES(?)", (tag,))
                 tag_id = db.execute(
