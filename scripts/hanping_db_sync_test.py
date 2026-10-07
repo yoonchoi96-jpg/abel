@@ -120,3 +120,83 @@ def test_sync_reuses_existing_hsk_word_when_word_and_pinyin_match(tmp_path: Path
         assert db.execute("SELECT COUNT(*) FROM words").fetchone()[0] == 1
         assert db.execute("SELECT meaning FROM words").fetchone()[0] == "유지하다"
         assert db.execute("SELECT word_id FROM hanping_vocab").fetchone()[0] == 1
+
+
+
+def test_sync_keeps_distinct_existing_homographs_by_pinyin(tmp_path: Path, monkeypatch):
+    db_root = tmp_path / "db"
+    monkeypatch.setattr(mod, "DB_PATH", db_root / "abel.sqlite3")
+
+    mod.init_db()
+    with sqlite3.connect(mod.DB_PATH) as db:
+        rows = [
+            ("行", "가다", "xing2", "동사", "", "hsk30_level6_1140.csv"),
+            ("行", "업종", "hang2", "명사", "", "hsk30_level6_1140.csv"),
+        ]
+        for word, meaning, pinyin, pos, example, source in rows:
+            db.execute(
+                """INSERT INTO words(
+                       word, meaning, pronunciation, part_of_speech, example,
+                       source_url, first_seen, last_seen, raw_json
+                   ) VALUES(?,?,?,?,?,?,?,?,?)""",
+                (word, meaning, pinyin, pos, example, source,
+                 "2026-10-07T00:00:00+00:00", "2026-10-07T00:00:00+00:00", "{}"),
+            )
+        db.commit()
+
+    payload = {
+        "schema_version": 1,
+        "source": "hanping",
+        "words": [{
+            "source": "hanping",
+            "hanzi": "行",
+            "simplified": "行",
+            "traditional": "行",
+            "pinyin": "hang2",
+            "starred": True,
+            "tags": ["HSK6"],
+            "note": "업종 의미",
+            "record_hash": "hang-record",
+        }],
+    }
+    inp = tmp_path / "normalized.json"
+    inp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    assert mod.sync(inp) == {"inserted": 0, "updated": 1, "total": 1}
+
+    with sqlite3.connect(mod.DB_PATH) as db:
+        assert db.execute("SELECT COUNT(*) FROM words WHERE word='行'").fetchone()[0] == 2
+        assert db.execute(
+            "SELECT meaning FROM words WHERE word='行' AND pronunciation='hang2'"
+        ).fetchone()[0] == "업종"
+        assert db.execute(
+            "SELECT meaning FROM words WHERE word='行' AND pronunciation='xing2'"
+        ).fetchone()[0] == "가다"
+
+
+def test_sync_rejects_record_without_hash_before_writing(tmp_path: Path, monkeypatch):
+    db_root = tmp_path / "db"
+    monkeypatch.setattr(mod, "DB_PATH", db_root / "abel.sqlite3")
+
+    payload = {
+        "schema_version": 1,
+        "source": "hanping",
+        "words": [{
+            "source": "hanping",
+            "hanzi": "维护",
+            "simplified": "维护",
+            "traditional": "維護",
+            "pinyin": "wei2 hu4",
+            "starred": True,
+            "tags": [],
+            "note": None,
+        }],
+    }
+    inp = tmp_path / "normalized.json"
+    inp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    import pytest
+    with pytest.raises(ValueError, match="record_hash"):
+        mod.sync(inp)
+
+    assert not mod.DB_PATH.exists()
