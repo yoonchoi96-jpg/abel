@@ -87,19 +87,30 @@ def process(path: Path) -> dict:
     return json.loads(routed.read_text(encoding="utf-8"))
 
 def run_once(directories: list[Path]) -> int:
+    """Process only the newest discovered export.
+
+    Hanping exports are authoritative snapshots, not append-only fragments.
+    Processing an older export after a newer one would incorrectly remove
+    vocabulary that is present in the newer snapshot, so discovery is treated
+    as a single-source snapshot stream and the newest file wins.
+    """
     state = load_state()
-    processed = 0
-    for path in candidate_files(directories):
-        digest = file_hash(path)
-        key = str(path.resolve())
-        if state.get(key) == digest:
-            continue
-        result = process(path)
-        state[key] = digest
-        save_state(state)
-        print(f"HANPING AUTO-SYNC: {path.name} -> {result['route_counts']}")
-        processed += 1
-    return processed
+    candidates = candidate_files(directories)
+    if not candidates:
+        return 0
+
+    path = candidates[-1]
+    digest = file_hash(path)
+    key = str(path.resolve())
+    if state.get(key) == digest:
+        return 0
+
+    result = process(path)
+    # Only mark the snapshot processed after the complete pipeline succeeds.
+    state[key] = digest
+    save_state(state)
+    print(f"HANPING AUTO-SYNC: {path.name} -> {result['route_counts']}")
+    return 1
 
 def main() -> None:
     ap = argparse.ArgumentParser()
