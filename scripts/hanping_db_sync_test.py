@@ -174,6 +174,50 @@ def test_sync_keeps_distinct_existing_homographs_by_pinyin(tmp_path: Path, monke
         ).fetchone()[0] == "가다"
 
 
+
+def test_sync_does_not_collapse_hanping_homographs(tmp_path: Path, monkeypatch):
+    db_root = tmp_path / "db"
+    monkeypatch.setattr(mod, "DB_PATH", db_root / "abel.sqlite3")
+
+    mod.init_db()
+    first = tmp_path / "first.json"
+    payload = {
+        "schema_version": 1,
+        "source": "hanping",
+        "words": [{
+            "source": "hanping",
+            "hanzi": "行",
+            "simplified": "行",
+            "traditional": "行",
+            "pinyin": "xing2",
+            "starred": True,
+            "tags": ["HSK6"],
+            "note": "가다",
+            "record_hash": "xing-record",
+        }],
+    }
+    first.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    assert mod.sync(first) == {"inserted": 1, "updated": 0, "total": 1}
+
+    second = tmp_path / "second.json"
+    payload["words"][0] = {
+        **payload["words"][0],
+        "pinyin": "hang2",
+        "note": "업종",
+        "record_hash": "hang-record",
+    }
+    second.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    assert mod.sync(second) == {"inserted": 1, "updated": 0, "total": 1}
+
+    with sqlite3.connect(mod.DB_PATH) as db:
+        assert db.execute("SELECT COUNT(*) FROM words WHERE word='行'").fetchone()[0] == 2
+        assert db.execute(
+            "SELECT meaning FROM words WHERE word='行' AND pronunciation='xing2'"
+        ).fetchone()[0] is None
+        assert db.execute(
+            "SELECT pronunciation FROM words WHERE word='行' ORDER BY pronunciation"
+        ).fetchall() == [("hang2",), ("xing2",)]
+
 def test_sync_rejects_record_without_hash_before_writing(tmp_path: Path, monkeypatch):
     db_root = tmp_path / "db"
     monkeypatch.setattr(mod, "DB_PATH", db_root / "abel.sqlite3")
