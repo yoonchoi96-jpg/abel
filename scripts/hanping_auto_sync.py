@@ -1,21 +1,11 @@
 #!/usr/bin/env python3
-"""Automatically discover Hanping exports on a Mac and feed them into Abel.
+"""Automatically discover Hanping exports on a Mac and run the Abel pipeline.
 
-This is deliberately a local filesystem watcher. It does not log in to
-Hanping, inspect browser sessions, decrypt Cloud Backup, or access credentials.
-
-Safety rule: a file is considered an export only when its filename or parent
-folder contains "hanping". This prevents unrelated text/CSV files in Downloads
-from being imported accidentally.
+Only files whose filename or immediate parent contains "hanping" are eligible.
+No login, cookies, browser sessions, cloud decryption, or credentials are used.
 """
 from __future__ import annotations
-
-import argparse
-import hashlib
-import json
-import subprocess
-import sys
-import time
+import argparse, hashlib, json, subprocess, sys, time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,14 +17,12 @@ DEFAULT_DIRS = [
     Path.home() / "Documents",
 ]
 
-
 def file_hash(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
-
 
 def load_state() -> dict:
     if not STATE.exists():
@@ -44,19 +32,12 @@ def load_state() -> dict:
     except Exception:
         return {}
 
-
 def save_state(state: dict) -> None:
     STATE.parent.mkdir(parents=True, exist_ok=True)
-    STATE.write_text(
-        json.dumps(state, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-
+    STATE.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 def is_hanping_path(path: Path) -> bool:
-    haystack = f"{path.name} {path.parent.name}".lower()
-    return "hanping" in haystack
-
+    return "hanping" in f"{path.name} {path.parent.name}".lower()
 
 def candidate_files(directories: list[Path]) -> list[Path]:
     out = []
@@ -64,54 +45,17 @@ def candidate_files(directories: list[Path]) -> list[Path]:
         if not directory.is_dir():
             continue
         for path in directory.iterdir():
-            if (
-                path.is_file()
-                and path.suffix.lower() in {".json", ".csv", ".tsv", ".txt"}
-                and is_hanping_path(path)
-            ):
+            if path.is_file() and path.suffix.lower() in {".json", ".csv", ".tsv", ".txt"} and is_hanping_path(path):
                 out.append(path)
     return sorted(set(out), key=lambda p: p.stat().st_mtime)
 
-
 def process(path: Path) -> dict:
-    inbox = ROOT / "data" / "hanping"
-    normalized = inbox / "normalized.json"
-    routed = inbox / "routed.json"
-
-    subprocess.run(
-        [
-            sys.executable,
-            str(ROOT / "scripts" / "hanping_vocab_import.py"),
-            str(path),
-            "-o",
-            str(normalized),
-        ],
-        check=True,
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "hanping_sync.py"), str(path)],
+        cwd=ROOT, check=True, capture_output=True, text=True
     )
-
-    # Route before mutating the DB. If routing rejects an unexpected export
-    # shape, the shared database remains untouched.
-    subprocess.run(
-        [
-            sys.executable,
-            str(ROOT / "scripts" / "hanping_router.py"),
-            str(normalized),
-            "-o",
-            str(routed),
-        ],
-        check=True,
-    )
-
-    subprocess.run(
-        [
-            sys.executable,
-            str(ROOT / "scripts" / "hanping_db_sync.py"),
-            str(normalized),
-        ],
-        check=True,
-    )
+    routed = ROOT / "data" / "hanping" / "routed.json"
     return json.loads(routed.read_text(encoding="utf-8"))
-
 
 def run_once(directories: list[Path]) -> int:
     state = load_state()
@@ -128,20 +72,17 @@ def run_once(directories: list[Path]) -> int:
         processed += 1
     return processed
 
-
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("directories", nargs="*", type=Path, default=DEFAULT_DIRS)
     ap.add_argument("--watch", action="store_true")
     ap.add_argument("--interval", type=int, default=30)
     args = ap.parse_args()
-
     while True:
         run_once([p.expanduser().resolve() for p in args.directories])
         if not args.watch:
             return
         time.sleep(max(5, args.interval))
-
 
 if __name__ == "__main__":
     main()
