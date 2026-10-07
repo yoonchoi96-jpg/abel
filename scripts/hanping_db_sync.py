@@ -69,6 +69,13 @@ def sync(path: Path = DEFAULT_INPUT) -> dict[str, int]:
     if payload.get("schema_version") != 1 or payload.get("source") != "hanping":
         raise ValueError("unsupported Hanping normalized payload")
 
+    # Validate the full payload before touching the database so a malformed
+    # snapshot cannot create or partially mutate the shared DB.
+    for item in payload.get("words", []):
+        word = (item.get("hanzi") or item.get("simplified") or "").strip()
+        if word and not item.get("record_hash"):
+            raise ValueError(f"Hanping record missing record_hash: {word}")
+
     init_db()
     now = now_iso()
     inserted = updated = 0
@@ -100,8 +107,6 @@ def sync(path: Path = DEFAULT_INPUT) -> dict[str, int]:
             word = (item.get("hanzi") or item.get("simplified") or "").strip()
             if not word:
                 continue
-            if not item.get("record_hash"):
-                raise ValueError(f"Hanping record missing record_hash: {word}")
             pinyin = (item.get("pinyin") or "").strip() or None
             traditional = (item.get("traditional") or "").strip() or None
             starred = 1 if item.get("starred") else 0
