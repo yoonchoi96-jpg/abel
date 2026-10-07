@@ -117,22 +117,26 @@ def parse_file(path: Path) -> list[dict[str, Any]]:
     return parse_text(path)
 
 def merge(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    by_word: dict[str, dict[str, Any]] = {}
+    # Pinyin is part of lexical identity when available. Hanping can contain
+    # homographs such as 行/xing2 and 行/hang2, so deduping by Hanzi alone
+    # would silently destroy one meaning.
+    by_identity: dict[tuple[str, str], dict[str, Any]] = {}
     for r in records:
-        old = by_word.get(r["hanzi"])
+        key = (r["hanzi"], str(r.get("pinyin") or "").strip())
+        old = by_identity.get(key)
         if not old:
-            by_word[r["hanzi"]] = dict(r)
+            by_identity[key] = dict(r)
             continue
         old["starred"] = old["starred"] or r["starred"]
         old["tags"] = sorted(set(old["tags"]) | set(r["tags"]))
         old["note"] = old["note"] or r["note"]
         old["traditional"] = old["traditional"] or r["traditional"]
         old["pinyin"] = old["pinyin"] or r["pinyin"]
-    for r in by_word.values():
+    for r in by_identity.values():
         r["record_hash"] = hashlib.sha256(
             json.dumps(r, ensure_ascii=False, sort_keys=True).encode("utf-8")
         ).hexdigest()
-    return sorted(by_word.values(), key=lambda x: x["hanzi"])
+    return sorted(by_identity.values(), key=lambda x: (x["hanzi"], x.get("pinyin") or ""))
 
 def main() -> None:
     ap = argparse.ArgumentParser()
