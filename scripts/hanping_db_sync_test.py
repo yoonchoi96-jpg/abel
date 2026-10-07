@@ -244,3 +244,32 @@ def test_sync_rejects_record_without_hash_before_writing(tmp_path: Path, monkeyp
         mod.sync(inp)
 
     assert not mod.DB_PATH.exists()
+
+
+def test_sync_removes_stale_hanping_metadata_but_keeps_canonical_word(tmp_path: Path, monkeypatch):
+    db_root = tmp_path / "db"
+    monkeypatch.setattr(mod, "DB_PATH", db_root / "abel.sqlite3")
+
+    first = tmp_path / "first.json"
+    payload = {
+        "schema_version": 1,
+        "source": "hanping",
+        "words": [{
+            "source": "hanping", "hanzi": "维护", "simplified": "维护",
+            "traditional": "維護", "pinyin": "wei2 hu4", "starred": True,
+            "tags": ["HSK6"], "note": "삭제 테스트", "record_hash": "first",
+        }],
+    }
+    first.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    assert mod.sync(first) == {"inserted": 1, "updated": 0, "total": 1}
+
+    second = tmp_path / "second.json"
+    payload["words"] = []
+    second.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    assert mod.sync(second) == {"inserted": 0, "updated": 0, "total": 0}
+
+    with sqlite3.connect(mod.DB_PATH) as db:
+        assert db.execute("SELECT COUNT(*) FROM words WHERE word='维护'").fetchone()[0] == 1
+        assert db.execute("SELECT COUNT(*) FROM hanping_vocab").fetchone()[0] == 0
+        assert db.execute("SELECT COUNT(*) FROM wordbook_words").fetchone()[0] == 0
+        assert db.execute("SELECT COUNT(*) FROM hanping_vocab_tags").fetchone()[0] == 0
