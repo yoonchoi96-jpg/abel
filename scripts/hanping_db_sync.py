@@ -27,25 +27,25 @@ def init_db() -> None:
 
 
 def _resolve_word_id(db, word: str, pinyin: str | None):
-    """Resolve Hanping to the strongest existing Abel lexical row.
+    """Resolve a Hanping record without collapsing homographs.
 
-    Prefer an existing Hanping row, then an exact word+pinyin row (for HSK/
-    dictionary enrichment), then the legacy meaning-null row. Only create a
-    new row when no deterministic candidate exists.
+    When pinyin exists it is the lexical discriminator. Without pinyin, an
+    existing Hanping row may be reused, followed by the legacy meaning-null
+    fallback.
     """
-    row = db.execute(
-        """SELECT w.id
-           FROM words w
-           JOIN hanping_vocab hv ON hv.word_id=w.id
-           WHERE w.word=?
-           ORDER BY w.id
-           LIMIT 1""",
-        (word,),
-    ).fetchone()
-    if row:
-        return row[0]
-
     if pinyin:
+        row = db.execute(
+            """SELECT w.id
+               FROM words w
+               JOIN hanping_vocab hv ON hv.word_id=w.id
+               WHERE w.word=? AND w.pronunciation=?
+               ORDER BY w.id
+               LIMIT 1""",
+            (word, pinyin),
+        ).fetchone()
+        if row:
+            return row[0]
+
         row = db.execute(
             """SELECT id FROM words
                WHERE word=? AND pronunciation=?
@@ -54,15 +54,29 @@ def _resolve_word_id(db, word: str, pinyin: str | None):
         ).fetchone()
         if row:
             return row[0]
+    else:
+        row = db.execute(
+            """SELECT w.id
+               FROM words w
+               JOIN hanping_vocab hv ON hv.word_id=w.id
+               WHERE w.word=?
+               ORDER BY w.id
+               LIMIT 1""",
+            (word,),
+        ).fetchone()
+        if row:
+            return row[0]
 
-    row = db.execute(
-        """SELECT id FROM words
-           WHERE word=? AND meaning IS NULL
-           ORDER BY id LIMIT 1""",
-        (word,),
-    ).fetchone()
-    return row[0] if row else None
+        row = db.execute(
+            """SELECT id FROM words
+               WHERE word=? AND meaning IS NULL
+               ORDER BY id LIMIT 1""",
+            (word,),
+        ).fetchone()
+        if row:
+            return row[0]
 
+    return None
 
 def sync(path: Path = DEFAULT_INPUT) -> dict[str, int]:
     payload = json.loads(path.read_text(encoding="utf-8"))
