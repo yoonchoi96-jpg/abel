@@ -23,3 +23,15 @@ def test_candidate_files_finds_bounded_nested_hanping_exports(tmp_path: Path):
     assert nested / "backup.csv" in found
     assert deep / "ignored.json" not in found
     assert root / "unrelated.json" not in found
+
+
+def test_file_hash_is_deterministic_for_stable_file(tmp_path: Path):
+    from scripts.hanping_auto_sync import file_hash
+    import hashlib
+
+    path = tmp_path / "Hanping" / "vocab.json"
+    path.parent.mkdir()
+    path.write_text('{"words":[]}', encoding="utf-8")
+
+    expected = hashlib.sha256(path.read_bytes()).hexdigest()
+    assert file_hash(path) == expected
