@@ -2,29 +2,43 @@
 
 Hanping is the user-facing vocabulary inbox. Abel is the canonical normalizer.
 
-## Current safe boundary
+## Supported ingestion boundary
 
 `hanping_vocab_import.py` accepts a vocabulary export/file and normalizes it into:
 
-- hanzi
-- simplified
+- hanzi / simplified
 - traditional
 - pinyin
 - starred
 - tags
 - note
-- record_hash
+- deterministic `record_hash`
 
-The importer deliberately does not handle Hanping login, OTPs, cookies, or browser sessions.
+It supports JSON, CSV, TSV and plain text. Duplicate headwords are merged; starred state is OR-merged, tags are unioned, and non-empty note/traditional/pinyin values are retained.
 
-## Current Hanping flow
+The importer deliberately does **not** handle Hanping login, OTPs, cookies, browser sessions, or private cloud decryption.
 
-1. In Hanping iPhone: Settings → Backup/Restore → sign in → **Back up to Cloud**.
-2. Open **My Vocabulary** in a normal browser and sign in with the same Hanping account.
-3. Once an actual vocabulary export/file is available, feed that file to this importer.
-4. Abel merges duplicate headwords and preserves the union of tags plus starred/note state.
-5. Dictionary/HSK enrichment happens downstream.
+## Recommended iPhone flow
 
-Hanping's official documentation says Cloud Backup stores starred words, custom tags, notes and history, and uploads only after the user explicitly taps Back up to Cloud. The My Vocabulary page decrypts the backup in the browser.
+1. Study in Hanping.
+2. Star words and add tags/notes as needed.
+3. In Hanping: **Settings → Backup/Restore → Cloud → Back up to Cloud**.
+4. For a file-based ingestion path, use Hanping's official **Import/Export Vocab File** feature and export the vocabulary to a text file.
+5. Put the exported file into the local Abel ingestion path and run the importer.
+6. Abel normalizes and upserts the vocabulary.
+7. Dictionary / HSK 3.0 / TOCFL enrichment happens downstream.
+8. Obsidian remains a downstream destination.
 
-Canonical HSK 3.0 data remains Abel-owned; Hanping tags are user metadata/reference signals only.
+Hanping's official documentation says Cloud Backup contains starred words, custom tags, notes and search history, and that nothing is uploaded until the user explicitly taps **Back up to Cloud**. Hanping also documents Import/Export Vocab File as a separate one-off in-app purchase feature.
+
+## Data ownership
+
+- **Hanping:** user vocabulary signal — starred state, tags, notes, history.
+- **Abel:** canonical vocabulary identity and enrichment, including the user's existing HSK 3.0 datasets.
+- **Obsidian:** downstream knowledge/learning presentation.
+
+Hanping HSK/TOCFL labels must not replace Abel's canonical HSK 3.0 datasets.
+
+## Operational rule
+
+Never commit exported vocabulary, cloud backups, cookies, session state, passwords, OTPs, auth headers, or other private account material to the repository.
