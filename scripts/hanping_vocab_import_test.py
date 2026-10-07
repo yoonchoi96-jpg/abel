@@ -26,7 +26,7 @@ def test_duplicate_merge_preserves_user_metadata():
     rows = merge([
         {
             "source": "hanping", "hanzi": "维护", "simplified": "维护",
-            "traditional": None, "pinyin": None, "starred": False,
+            "traditional": None, "pinyin": "wei2 hu4", "starred": False,
             "tags": ["HSK6"], "note": None, "record_hash": "x"
         },
         {
@@ -43,6 +43,26 @@ def test_duplicate_merge_preserves_user_metadata():
     assert rows[0]["note"] == "公司用语"
     assert len(rows[0]["record_hash"]) == 64
 
+
+
+def test_homographs_remain_distinct_by_pinyin():
+    rows = merge([
+        {
+            "source": "hanping", "hanzi": "行", "simplified": "行",
+            "traditional": "行", "pinyin": "xing2", "starred": True,
+            "tags": ["HSK6"], "note": "가다", "record_hash": "x",
+        },
+        {
+            "source": "hanping", "hanzi": "行", "simplified": "行",
+            "traditional": "行", "pinyin": "hang2", "starred": True,
+            "tags": ["HSK6"], "note": "업종", "record_hash": "y",
+        },
+    ])
+    assert len(rows) == 2
+    assert [(r["hanzi"], r["pinyin"]) for r in rows] == [
+        ("行", "hang2"),
+        ("行", "xing2"),
+    ]
 
 def test_record_hash_is_deterministic(tmp_path: Path):
     p = tmp_path / "vocab.txt"
