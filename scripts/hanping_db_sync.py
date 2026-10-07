@@ -83,9 +83,9 @@ def sync(path: Path = DEFAULT_INPUT) -> dict[str, int]:
                    first_seen,last_seen,raw_json)
                    VALUES(?,?,?,?,?,?,?,?)
                    ON CONFLICT(word_id) DO UPDATE SET
-                     traditional=COALESCE(excluded.traditional,hanping_vocab.traditional),
-                     starred=MAX(hanping_vocab.starred,excluded.starred),
-                     note=COALESCE(excluded.note,hanping_vocab.note),
+                     traditional=excluded.traditional,
+                     starred=excluded.starred,
+                     note=excluded.note,
                      record_hash=excluded.record_hash,
                      last_seen=excluded.last_seen,
                      raw_json=excluded.raw_json""",
