@@ -117,26 +117,48 @@ def parse_file(path: Path) -> list[dict[str, Any]]:
     return parse_text(path)
 
 def merge(records: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    # Pinyin is part of lexical identity when available. Hanping can contain
-    # homographs such as 行/xing2 and 行/hang2, so deduping by Hanzi alone
-    # would silently destroy one meaning.
+    # Pinyin distinguishes true homographs. A record without pinyin is
+    # incomplete metadata, so it may merge into the only matching Hanzi
+    # record, but two explicitly different pinyin values remain separate.
     by_identity: dict[tuple[str, str], dict[str, Any]] = {}
     for r in records:
-        key = (r["hanzi"], str(r.get("pinyin") or "").strip())
-        old = by_identity.get(key)
-        if not old:
-            by_identity[key] = dict(r)
+        word = r["hanzi"]
+        pinyin = str(r.get("pinyin") or "").strip()
+        exact = (word, pinyin)
+        old = by_identity.get(exact)
+
+        if old is None and pinyin:
+            old = by_identity.get((word, ""))
+            if old is not None:
+                del by_identity[(word, "")]
+                old["pinyin"] = pinyin
+
+        if old is None and not pinyin:
+            explicit = [
+                value for (w, p), value in by_identity.items()
+                if w == word and p
+            ]
+            if len(explicit) == 1:
+                old = explicit[0]
+
+        if old is None:
+            by_identity[exact] = dict(r)
             continue
+
         old["starred"] = old["starred"] or r["starred"]
         old["tags"] = sorted(set(old["tags"]) | set(r["tags"]))
         old["note"] = old["note"] or r["note"]
         old["traditional"] = old["traditional"] or r["traditional"]
         old["pinyin"] = old["pinyin"] or r["pinyin"]
+
     for r in by_identity.values():
         r["record_hash"] = hashlib.sha256(
             json.dumps(r, ensure_ascii=False, sort_keys=True).encode("utf-8")
         ).hexdigest()
-    return sorted(by_identity.values(), key=lambda x: (x["hanzi"], x.get("pinyin") or ""))
+    return sorted(
+        by_identity.values(),
+        key=lambda x: (x["hanzi"], x.get("pinyin") or ""),
+    )
 
 def main() -> None:
     ap = argparse.ArgumentParser()
