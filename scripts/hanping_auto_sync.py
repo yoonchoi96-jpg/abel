@@ -4,9 +4,9 @@
 This is deliberately a local filesystem watcher. It does not log in to
 Hanping, inspect browser sessions, decrypt Cloud Backup, or access credentials.
 
-By default it watches iCloud Drive/Downloads, Downloads and Documents and
-processes each file once using a content hash. Use --watch for continuous
-polling.
+Safety rule: a file is considered an export only when its filename or parent
+folder contains "hanping". This prevents unrelated text/CSV files in Downloads
+from being imported accidentally.
 """
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 STATE = ROOT / "data" / "hanping" / ".auto_sync_state.json"
 DEFAULT_DIRS = [
+    Path.home() / "Library" / "Mobile Documents" / "com~apple~CloudDocs" / "Hanping",
     Path.home() / "Library" / "Mobile Documents" / "com~apple~CloudDocs" / "Downloads",
     Path.home() / "Downloads",
     Path.home() / "Documents",
@@ -46,7 +47,15 @@ def load_state() -> dict:
 
 def save_state(state: dict) -> None:
     STATE.parent.mkdir(parents=True, exist_ok=True)
-    STATE.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    STATE.write_text(
+        json.dumps(state, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def is_hanping_path(path: Path) -> bool:
+    haystack = f"{path.name} {path.parent.name}".lower()
+    return "hanping" in haystack
 
 
 def candidate_files(directories: list[Path]) -> list[Path]:
@@ -55,7 +64,11 @@ def candidate_files(directories: list[Path]) -> list[Path]:
         if not directory.is_dir():
             continue
         for path in directory.iterdir():
-            if path.is_file() and path.suffix.lower() in {".json", ".csv", ".tsv", ".txt"}:
+            if (
+                path.is_file()
+                and path.suffix.lower() in {".json", ".csv", ".tsv", ".txt"}
+                and is_hanping_path(path)
+            ):
                 out.append(path)
     return sorted(set(out), key=lambda p: p.stat().st_mtime)
 
@@ -63,6 +76,8 @@ def candidate_files(directories: list[Path]) -> list[Path]:
 def process(path: Path) -> dict:
     inbox = ROOT / "data" / "hanping"
     normalized = inbox / "normalized.json"
+    routed = inbox / "routed.json"
+
     subprocess.run(
         [
             sys.executable,
@@ -73,6 +88,20 @@ def process(path: Path) -> dict:
         ],
         check=True,
     )
+
+    # Route before mutating the DB. If routing rejects an unexpected export
+    # shape, the shared database remains untouched.
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "hanping_router.py"),
+            str(normalized),
+            "-o",
+            str(routed),
+        ],
+        check=True,
+    )
+
     subprocess.run(
         [
             sys.executable,
@@ -81,17 +110,7 @@ def process(path: Path) -> dict:
         ],
         check=True,
     )
-    subprocess.run(
-        [
-            sys.executable,
-            str(ROOT / "scripts" / "hanping_router.py"),
-            str(normalized),
-            "-o",
-            str(inbox / "routed.json"),
-        ],
-        check=True,
-    )
-    return json.loads((inbox / "routed.json").read_text(encoding="utf-8"))
+    return json.loads(routed.read_text(encoding="utf-8"))
 
 
 def run_once(directories: list[Path]) -> int:
