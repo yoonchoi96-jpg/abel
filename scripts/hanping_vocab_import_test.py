@@ -20,3 +20,33 @@ def test_json_tags_and_star(tmp_path: Path):
     assert rows[0]["hanzi"] == "维护"
     assert rows[0]["starred"] is True
     assert rows[0]["tags"] == ["HSK6", "工作"]
+
+
+def test_duplicate_merge_preserves_user_metadata():
+    rows = merge([
+        {
+            "source": "hanping", "hanzi": "维护", "simplified": "维护",
+            "traditional": None, "pinyin": None, "starred": False,
+            "tags": ["HSK6"], "note": None, "record_hash": "x"
+        },
+        {
+            "source": "hanping", "hanzi": "维护", "simplified": "维护",
+            "traditional": "維護", "pinyin": "wei2 hu4", "starred": True,
+            "tags": ["工作"], "note": "公司用语", "record_hash": "y"
+        },
+    ])
+    assert len(rows) == 1
+    assert rows[0]["starred"] is True
+    assert rows[0]["tags"] == ["HSK6", "工作"]
+    assert rows[0]["traditional"] == "維護"
+    assert rows[0]["pinyin"] == "wei2 hu4"
+    assert rows[0]["note"] == "公司用语"
+    assert len(rows[0]["record_hash"]) == 64
+
+
+def test_record_hash_is_deterministic(tmp_path: Path):
+    p = tmp_path / "vocab.txt"
+    p.write_text("维护\n", encoding="utf-8")
+    first = merge(parse_file(p))[0]["record_hash"]
+    second = merge(parse_file(p))[0]["record_hash"]
+    assert first == second
