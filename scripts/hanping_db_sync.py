@@ -93,6 +93,7 @@ def sync(path: Path = DEFAULT_INPUT) -> dict[str, int]:
     init_db()
     now = now_iso()
     inserted = updated = 0
+    incoming_word_ids: set[int] = set()
 
     with sqlite3.connect(DB_PATH) as db:
         db.execute("PRAGMA foreign_keys=ON")
@@ -145,6 +146,7 @@ def sync(path: Path = DEFAULT_INPUT) -> dict[str, int]:
                 word_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
                 inserted += 1
 
+            incoming_word_ids.add(word_id)
             db.execute(
                 """INSERT INTO wordbook_words(wordbook_id,word_id,first_seen,last_seen,raw_json)
                    VALUES(?,?,?,?,?)
@@ -176,6 +178,34 @@ def sync(path: Path = DEFAULT_INPUT) -> dict[str, int]:
                     "INSERT OR IGNORE INTO hanping_vocab_tags(word_id,tag_id) VALUES(?,?)",
                     (word_id, tag_id),
                 )
+
+        # The Hanping export is an authoritative snapshot of Hanping-owned
+        # metadata. Remove entries that disappeared from the latest snapshot,
+        # but never delete the canonical words row because it may be owned by
+        # HSK/TOCFL or another dictionary source.
+        stale_rows = db.execute(
+            "SELECT word_id FROM hanping_vocab WHERE word_id NOT IN ("
+            + ",".join("?" for _ in incoming_word_ids)
+            + ")",
+            tuple(sorted(incoming_word_ids)),
+        ).fetchall() if incoming_word_ids else db.execute(
+            "SELECT word_id FROM hanping_vocab"
+        ).fetchall()
+        stale_ids = [row[0] for row in stale_rows]
+        if stale_ids:
+            placeholders = ",".join("?" for _ in stale_ids)
+            db.execute(
+                f"DELETE FROM hanping_vocab_tags WHERE word_id IN ({placeholders})",
+                stale_ids,
+            )
+            db.execute(
+                f"DELETE FROM wordbook_words WHERE wordbook_id=? AND word_id IN ({placeholders})",
+                [book_id, *stale_ids],
+            )
+            db.execute(
+                f"DELETE FROM hanping_vocab WHERE word_id IN ({placeholders})",
+                stale_ids,
+            )
 
         db.commit()
 
