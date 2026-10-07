@@ -20,7 +20,9 @@ def now_iso() -> str:
 
 
 def init_db() -> None:
-    DATA_ROOT.mkdir(parents=True, exist_ok=True)
+    # Use DB_PATH as the source of truth so tests and callers that override
+    # the database path can safely point at a fresh directory.
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(DB_PATH) as db:
         db.execute("PRAGMA foreign_keys=ON")
         db.executescript("""
