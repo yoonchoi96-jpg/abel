@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+"""Upsert normalized Hanping vocabulary into Abel's shared local DB."""
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+from abel_wordbook_db import DB_PATH, init_db, now_iso
+
+ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_INPUT = ROOT / "data" / "hanping" / "normalized.json"
+HANPING_BOOK = "Hanping"
+
+
+def sync(path: Path = DEFAULT_INPUT) -> dict[str, int]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("schema_version") != 1 or payload.get("source") != "hanping":
+        raise ValueError("unsupported Hanping normalized payload")
+
+    init_db()
+    now = now_iso()
+    inserted = updated = 0
+
+    import sqlite3
+    with sqlite3.connect(DB_PATH) as db:
+        db.execute("PRAGMA foreign_keys=ON")
+        row = db.execute(
+            "SELECT id FROM wordbooks WHERE naver_id IS NULL AND name=?",
+            (HANPING_BOOK,),
+        ).fetchone()
+        if row:
+            book_id = row[0]
+            db.execute("UPDATE wordbooks SET last_seen=? WHERE id=?", (now, book_id))
+        else:
+            db.execute(
+                """INSERT INTO wordbooks(naver_id,name,source_url,first_seen,last_seen,raw_json)
+                   VALUES(NULL,?,?,?,?,?)""",
+                (HANPING_BOOK, now, now, json.dumps({"source": "hanping"}, ensure_ascii=False)),
+            )
+            book_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        for item in payload.get("words", []):
+            word = (item.get("hanzi") or item.get("simplified") or "").strip()
+            if not word:
+                continue
+            pinyin = (item.get("pinyin") or "").strip() or None
+            traditional = (item.get("traditional") or "").strip() or None
+            starred = 1 if item.get("starred") else 0
+            note = item.get("note")
+            raw = json.dumps(item, ensure_ascii=False)
+            existing = db.execute(
+                "SELECT id FROM words WHERE word=? AND meaning IS NULL",
+                (word,),
+            ).fetchone()
+            if existing:
+                word_id = existing[0]
+                db.execute(
+                    """UPDATE words SET pronunciation=COALESCE(?,pronunciation),
+                       last_seen=?,raw_json=COALESCE(?,raw_json) WHERE id=?""",
+                    (pinyin, now, raw, word_id),
+                )
+                updated += 1
+            else:
+                db.execute(
+                    """INSERT INTO words(word,meaning,pronunciation,part_of_speech,example,
+                       source_url,first_seen,last_seen,raw_json)
+                       VALUES(?,?,?,?,?,?,?,?,?)""",
+                    (word, None, pinyin, None, "", "hanping", now, now, raw),
+                )
+                word_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+                inserted += 1
+
+            db.execute(
+                """INSERT INTO wordbook_words(wordbook_id,word_id,first_seen,last_seen,raw_json)
+                   VALUES(?,?,?,?,?)
+                   ON CONFLICT(wordbook_id,word_id) DO UPDATE SET
+                     last_seen=excluded.last_seen,raw_json=excluded.raw_json""",
+                (book_id, word_id, now, now, raw),
+            )
+            db.execute(
+                """INSERT INTO hanping_vocab(word_id,traditional,starred,note,record_hash,
+                   first_seen,last_seen,raw_json)
+                   VALUES(?,?,?,?,?,?,?,?)
+                   ON CONFLICT(word_id) DO UPDATE SET
+                     traditional=COALESCE(excluded.traditional,hanping_vocab.traditional),
+                     starred=MAX(hanping_vocab.starred,excluded.starred),
+                     note=COALESCE(excluded.note,hanping_vocab.note),
+                     record_hash=excluded.record_hash,
+                     last_seen=excluded.last_seen,
+                     raw_json=excluded.raw_json""",
+                (word_id, traditional, starred, note, item["record_hash"], now, now, raw),
+            )
+
+            db.execute(
+                "DELETE FROM hanping_vocab_tags WHERE word_id=?", (word_id,)
+            )
+            for tag in sorted(set(item.get("tags") or [])):
+                db.execute("INSERT OR IGNORE INTO hanping_tags(name) VALUES(?)", (tag,))
+                tag_id = db.execute(
+                    "SELECT id FROM hanping_tags WHERE name=?", (tag,)
+                ).fetchone()[0]
+                db.execute(
+                    "INSERT OR IGNORE INTO hanping_vocab_tags(word_id,tag_id) VALUES(?,?)",
+                    (word_id, tag_id),
+                )
+
+        db.commit()
+
+    return {"inserted": inserted, "updated": updated, "total": len(payload.get("words", []))}
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("input", type=Path, nargs="?", default=DEFAULT_INPUT)
+    args = ap.parse_args()
+    stats = sync(args.input.expanduser().resolve())
+    print(json.dumps(stats, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()
