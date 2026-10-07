@@ -41,9 +41,10 @@ The supported V1 path is **official/user-provided vocabulary export → local Ab
 1. Export vocabulary from Hanping using its supported Import/Export Vocab File feature.
 2. Run `python scripts/hanping_ingest.py /path/to/export.txt`.
 3. The normalized snapshot is written to `data/hanping/normalized.json`, which is intentionally git-ignored.
-4. Feed that normalized data into the next Abel database/upstream enrichment stage once the actual Hanping export format has been verified.
+4. Feed that normalized data into the shared Abel SQLite database with `python scripts/hanping_db_sync.py`.
+5. Existing HSK 3.0 / TOCFL / dictionary enrichment can then consume the shared word identity layer.
 
-The normalizer accepts JSON, CSV, TSV, and plain text and preserves starred state, tags, notes, traditional characters and pinyin when those fields are present.
+The normalizer accepts JSON, CSV, TSV, and plain text and preserves starred state, tags, notes, traditional characters and pinyin when those fields are present. The DB sync keeps Hanping metadata in dedicated `hanping_*` tables while linking the canonical word to the shared `words` / `wordbook_words` schema.
 
 Hanping account authentication, OTP handling, cookies, browser-session capture, and private cloud decryption are deliberately outside Abel.
 
