@@ -1,38 +1,30 @@
-# Hanping to Abel Collector
+# Hanping → Abel Collector
 
-Hanping Cloud Backup is the source boundary. Hanping documents that Cloud Backup
-contains starred words, custom tags, notes and search history, and that backups
-are encrypted before storage. Upload happens only when the user taps Back up to Cloud.
+## Scope
 
-The public My Vocabulary web app is the inspection surface. It decrypts data in
-the browser, so Abel should not implement Hanping cryptography.
+Hanping is the vocabulary capture UI. Abel owns normalization, canonical identity, enrichment and downstream export.
 
-V1 workflow:
+The supported boundary is **file-based Hanping vocabulary ingestion**. The collector does not automate Hanping account authentication or private cloud decryption.
+
+## V1 flow
+
 1. Study in Hanping.
-2. Star, tag, or annotate vocabulary.
-3. Tap Back up to Cloud.
-4. On Mac, open My Vocabulary with a persistent local Playwright profile.
-5. Sign in interactively when needed.
-6. Inspect where decrypted vocabulary lives: JS state, IndexedDB, network data,
-   or DOM as a last resort.
-7. Implement extractor only after that inspection.
-8. Normalize into Abel and upsert by stable hash.
-9. Enrich with Abel-owned HSK 3.0, TOCFL, and dictionary layers.
-10. Export downstream to Obsidian.
+2. Star words and use custom tags/notes.
+3. Optionally use Hanping Cloud Backup for an off-device copy.
+4. Export vocabulary with Hanping's official **Import/Export Vocab File** feature.
+5. Feed the exported text file to `scripts/hanping_vocab_import.py`.
+6. Abel normalizes, deduplicates and produces deterministic hashes.
+7. Existing Abel HSK 3.0 / TOCFL / dictionary layers enrich the canonical entry.
+8. Obsidian consumes the normalized downstream representation.
 
-Security:
-- Browser profile: ~/.abel/hanping-browser
-- Inspection output: ~/.abel/hanping-inspect
-- Never commit cookies, storage-state JSON, OTPs, passwords, auth headers,
-  browser profiles, or raw Hanping backups.
-- Inspection output can contain private vocabulary.
+## Security boundary
 
-Install:
-python -m pip install playwright
-python -m playwright install chromium
+Never put Hanping passwords, OTPs, cookies, browser profiles, auth headers, cloud backups or raw private vocabulary exports into GitHub.
 
-Run:
-python scripts/hanping_inspect.py
+The importer contains no authentication/session automation and does not implement Hanping's cloud encryption.
 
-The inspector is deliberately not a production collector yet. Its purpose is to
-identify the most stable plaintext data surface exposed by the official web app.
+## Current blocker
+
+Hanping's public My Vocabulary page is a browser-side viewing surface for cloud-backed vocabulary. There is no documented public API/export endpoint in the official documentation that Abel can safely treat as a stable machine interface.
+
+Therefore the production collector is deliberately **file-based** until a supported machine-readable interface is available.
