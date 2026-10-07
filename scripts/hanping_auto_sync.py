@@ -17,12 +17,27 @@ DEFAULT_DIRS = [
     Path.home() / "Documents",
 ]
 
-def file_hash(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
+def file_hash(path: Path, attempts: int = 3) -> str:
+    """Hash a file only after confirming it stayed unchanged during the read.
+
+    Cloud/Files providers can expose a file before its contents are fully
+    written. Refusing an unstable file prevents a partial export from being
+    marked as successfully processed.
+    """
+    for _ in range(max(1, attempts)):
+        before = path.stat()
+        h = hashlib.sha256()
+        with path.open("rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                h.update(chunk)
+        after = path.stat()
+        if (
+            before.st_size == after.st_size
+            and before.st_mtime_ns == after.st_mtime_ns
+        ):
+            return h.hexdigest()
+        time.sleep(0.2)
+    raise RuntimeError(f"Hanping export changed while being read: {path}")
 
 def load_state() -> dict:
     if not STATE.exists():
