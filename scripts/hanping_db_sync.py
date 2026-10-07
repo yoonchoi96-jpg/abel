@@ -8,13 +8,22 @@ import sqlite3
 from pathlib import Path
 
 try:
-    from scripts.abel_wordbook_db import DB_PATH, init_db, now_iso
+    from scripts import abel_wordbook_db as db_layer
 except ModuleNotFoundError:
-    from abel_wordbook_db import DB_PATH, init_db, now_iso
+    import abel_wordbook_db as db_layer
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT = ROOT / "data" / "hanping" / "normalized.json"
 HANPING_BOOK = "Hanping"
+
+DB_PATH = db_layer.DB_PATH
+now_iso = db_layer.now_iso
+
+
+def init_db() -> None:
+    """Initialize the shared schema using this module's active DB_PATH."""
+    db_layer.DB_PATH = DB_PATH
+    db_layer.init_db()
 
 
 def _resolve_word_id(db, word: str, pinyin: str | None):
@@ -91,6 +100,8 @@ def sync(path: Path = DEFAULT_INPUT) -> dict[str, int]:
             word = (item.get("hanzi") or item.get("simplified") or "").strip()
             if not word:
                 continue
+            if not item.get("record_hash"):
+                raise ValueError(f"Hanping record missing record_hash: {word}")
             pinyin = (item.get("pinyin") or "").strip() or None
             traditional = (item.get("traditional") or "").strip() or None
             starred = 1 if item.get("starred") else 0
