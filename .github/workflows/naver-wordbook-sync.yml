@@ -1,0 +1,65 @@
+name: Naver Wordbook Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Run mode
+        required: true
+        default: sync
+        type: choice
+        options:
+          - sync
+          - probe
+  schedule:
+    - cron: "0 22 * * *"
+    - cron: "0 10 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: naver-wordbook-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: [self-hosted, macOS, naver-wordbook]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Playwright
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Sync
+        env:
+          NAVER_WORDBOOK_EXPORT: data/naver_wordbook.json
+          NAVER_BROWSER: chrome
+        run: |
+          MODE="sync"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            MODE="${{ inputs.mode }}"
+          fi
+          python scripts/naver_wordbook_sync.py --"$MODE"
+
+      - name: Commit canonical export
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.mode == 'sync' }}
+        run: |
+          git config user.name "abel-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/naver_wordbook.json
+          if git diff --cached --quiet; then
+            echo "No wordbook changes."
+            exit 0
+          fi
+          git commit -m "chore: sync NAVER wordbook"
+          git push
