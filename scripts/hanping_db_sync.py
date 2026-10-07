@@ -13,6 +13,44 @@ DEFAULT_INPUT = ROOT / "data" / "hanping" / "normalized.json"
 HANPING_BOOK = "Hanping"
 
 
+def _resolve_word_id(db, word: str, pinyin: str | None):
+    """Resolve Hanping to the strongest existing Abel lexical row.
+
+    Prefer an existing Hanping row, then an exact word+pinyin row (for HSK/
+    dictionary enrichment), then the legacy meaning-null row. Only create a
+    new row when no deterministic candidate exists.
+    """
+    row = db.execute(
+        """SELECT w.id
+           FROM words w
+           JOIN hanping_vocab hv ON hv.word_id=w.id
+           WHERE w.word=?
+           ORDER BY w.id
+           LIMIT 1""",
+        (word,),
+    ).fetchone()
+    if row:
+        return row[0]
+
+    if pinyin:
+        row = db.execute(
+            """SELECT id FROM words
+               WHERE word=? AND pronunciation=?
+               ORDER BY id LIMIT 1""",
+            (word, pinyin),
+        ).fetchone()
+        if row:
+            return row[0]
+
+    row = db.execute(
+        """SELECT id FROM words
+           WHERE word=? AND meaning IS NULL
+           ORDER BY id LIMIT 1""",
+        (word,),
+    ).fetchone()
+    return row[0] if row else None
+
+
 def sync(path: Path = DEFAULT_INPUT) -> dict[str, int]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if payload.get("schema_version") != 1 or payload.get("source") != "hanping":
@@ -36,7 +74,7 @@ def sync(path: Path = DEFAULT_INPUT) -> dict[str, int]:
             db.execute(
                 """INSERT INTO wordbooks(naver_id,name,source_url,first_seen,last_seen,raw_json)
                    VALUES(NULL,?,?,?,?,?)""",
-                (HANPING_BOOK, now, now, json.dumps({"source": "hanping"}, ensure_ascii=False)),
+                (HANPING_BOOK, now, now, now, json.dumps({"source": "hanping"}, ensure_ascii=False)),
             )
             book_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
 
@@ -49,12 +87,9 @@ def sync(path: Path = DEFAULT_INPUT) -> dict[str, int]:
             starred = 1 if item.get("starred") else 0
             note = item.get("note")
             raw = json.dumps(item, ensure_ascii=False)
-            existing = db.execute(
-                "SELECT id FROM words WHERE word=? AND meaning IS NULL",
-                (word,),
-            ).fetchone()
+            existing = _resolve_word_id(db, word, pinyin)
             if existing:
-                word_id = existing[0]
+                word_id = existing
                 db.execute(
                     """UPDATE words SET pronunciation=COALESCE(?,pronunciation),
                        last_seen=?,raw_json=COALESCE(?,raw_json) WHERE id=?""",
