@@ -32,6 +32,21 @@ HSK numbered Naver volumes are grouped: `신HSK_5급 필수단어 1~5탄` → `�
 - `scripts/hsk30_sync.py`: imports both collections into the same SQLite schema.
 - `.github/workflows/hsk30-sync.yml`: scheduled daily at 07:00 KST.
 
+## Hanping ingestion boundary
+
+Hanping is the vocabulary capture UI; Abel owns normalization and downstream enrichment.
+
+The supported V1 path is **official/user-provided vocabulary export → local Abel normalization**:
+
+1. Export vocabulary from Hanping using its supported Import/Export Vocab File feature.
+2. Run `python scripts/hanping_ingest.py /path/to/export.txt`.
+3. The normalized snapshot is written to `data/hanping/normalized.json`, which is intentionally git-ignored.
+4. Feed that normalized data into the next Abel database/upstream enrichment stage once the actual Hanping export format has been verified.
+
+The normalizer accepts JSON, CSV, TSV, and plain text and preserves starred state, tags, notes, traditional characters and pinyin when those fields are present.
+
+Hanping account authentication, OTP handling, cookies, browser-session capture, and private cloud decryption are deliberately outside Abel.
+
 ## Naver data boundary
 
 Abel intentionally does not automate access to the user's Naver account. It does not use GitHub Actions, a self-hosted runner, Playwright login, stored Naver sessions, or `NAVER_STORAGE_STATE_B64` to access the account.
