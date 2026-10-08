@@ -538,14 +538,26 @@ def page_url_for_wordbook(nid: str, name: str) -> str:
     )
 
 def normalize_pronunciation(value: str) -> str:
-    """Normalize a visible Naver pinyin/pronunciation string.
-
-    Keep tone digits/marks intact; only collapse browser whitespace and common
-    punctuation so the value can be used as the cross-source lexical key.
-    """
-    value = re.sub(r"\s+", " ", (value or "").strip())
+    """Normalize Naver pinyin to the numeric-tone form used by Abel."""
+    value = re.sub(r"\\s+", " ", (value or "").strip())
     value = value.strip(" /|·•,;:")
-    return value
+    tone_map = {
+        "ā":"a1","á":"a2","ǎ":"a3","à":"a4",
+        "ē":"e1","é":"e2","ě":"e3","è":"e4",
+        "ī":"i1","í":"i2","ǐ":"i3","ì":"i4",
+        "ō":"o1","ó":"o2","ǒ":"o3","ò":"o4",
+        "ū":"u1","ú":"u2","ǔ":"u3","ù":"u4",
+        "ǖ":"ü1","ǘ":"ü2","ǚ":"ü3","ǜ":"ü4",
+        "Ā":"A1","Á":"A2","Ǎ":"A3","À":"A4",
+        "Ē":"E1","É":"E2","Ě":"E3","È":"E4",
+        "Ī":"I1","Í":"I2","Ǐ":"I3","Ì":"I4",
+        "Ō":"O1","Ó":"O2","Ǒ":"O3","Ò":"O4",
+        "Ū":"U1","Ú":"U2","Ǔ":"U3","Ù":"U4",
+        "Ǖ":"Ü1","Ǘ":"Ü2","Ǚ":"Ü3","Ǜ":"Ü4",
+    }
+    for marked, numbered in tone_map.items():
+        value = value.replace(marked, numbered)
+    return value.lower()
 
 
 def extract_pronunciation(el, raw: str, lines_: list[str]) -> str:
