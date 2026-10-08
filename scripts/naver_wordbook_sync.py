@@ -557,6 +557,8 @@ def normalize_pronunciation(value: str) -> str:
     }
     for marked, numbered in tone_map.items():
         value = value.replace(marked, numbered)
+    # Move a generated tone digit to the end of its syllable: wéi -> wei2.
+    value = re.sub(r"([a-zü]+)([1-5])([a-zü]+)", r"\1\3\2", value, flags=re.IGNORECASE)
     return value.lower()
 
 
