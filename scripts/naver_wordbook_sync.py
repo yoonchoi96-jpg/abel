@@ -539,7 +539,7 @@ def page_url_for_wordbook(nid: str, name: str) -> str:
 
 def normalize_pronunciation(value: str) -> str:
     """Normalize Naver pinyin to the numeric-tone form used by Abel."""
-    value = re.sub(r"\\s+", " ", (value or "").strip())
+    value = re.sub(r"\s+", " ", (value or "").strip())
     value = value.strip(" /|·•,;:")
     tone_map = {
         "ā":"a1","á":"a2","ǎ":"a3","à":"a4",
