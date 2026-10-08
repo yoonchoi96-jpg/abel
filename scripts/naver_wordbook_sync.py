@@ -580,16 +580,12 @@ def extract_pronunciation(el, raw: str, lines_: list[str]) -> str:
     candidates.extend(lines_[1:])
     # Tone-mark and numbered pinyin are strong signals. This deliberately does
     # not invent pronunciation from an arbitrary Latin-only line.
-    pinyin_re = re.compile(
-        r"^(?:(?:[a-züv]+[1-5]?)(?:[\\s'’-]+|$))+",
-        re.IGNORECASE,
-    )
     tone_mark_re = re.compile(r"[āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜĀÁǍÀĒÉĚÈĪÍǏÌŌÓǑÒŪÚǓÙÜǕǗǙǛ]")
     for candidate in candidates:
         value = normalize_pronunciation(candidate)
         if not value or len(value) > 120:
             continue
-        if tone_mark_re.search(value) or re.fullmatch(r"[a-züv1-5\\s'’-]+", value, re.IGNORECASE):
+        if tone_mark_re.search(value) or re.fullmatch(r"[a-züv1-5\s'’-]+", value, re.IGNORECASE):
             # Require either a tone marker/digit or at least two syllable-like
             # tokens. This keeps ordinary English/Korean metadata out.
             tokens = re.findall(r"[a-züv]+[1-5]?", value, re.IGNORECASE)
