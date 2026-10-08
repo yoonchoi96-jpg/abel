@@ -348,7 +348,7 @@ def test_naver_and_hanping_keep_cross_source_homographs_separate(
 
 
 def test_normalize_pronunciation_keeps_pinyin_tones_and_rejects_plain_metadata():
-    assert mod.normalize_pronunciation("  wéi   hù  ") == "wéi hù"
+    assert mod.normalize_pronunciation("  wéi   hù  ") == "wei2 hu4"
     assert mod.normalize_pronunciation("wei2 hu4") == "wei2 hu4"
 
 
