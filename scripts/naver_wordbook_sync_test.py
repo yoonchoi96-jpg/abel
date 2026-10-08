@@ -385,6 +385,8 @@ def test_extract_pronunciation_accepts_numeric_or_tone_marked_pinyin():
     assert mod.extract_pronunciation(Dummy("wéi hù"), "", ["维护"]) == "wei2 hu4"
     assert mod.extract_pronunciation(Dummy("wei2 hu4"), "", ["维护"]) == "wei2 hu4"
     assert mod.extract_pronunciation(Dummy("study word"), "", ["维护"]) == ""
+    assert mod.extract_pronunciation(Dummy("version2"), "", ["维护"]) == ""
+    assert mod.extract_pronunciation(Dummy("lesson 1"), "", ["维护"]) == ""
 
 
 def test_pronunciation_extractor_requires_explicit_pinyin_signal():
