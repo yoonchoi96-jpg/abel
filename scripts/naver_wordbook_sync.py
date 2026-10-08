@@ -593,7 +593,7 @@ def extract_pronunciation(el, raw: str, lines_: list[str]) -> str:
             # Require either a tone marker/digit or at least two syllable-like
             # tokens. This keeps ordinary English/Korean metadata out.
             tokens = re.findall(r"[a-züv]+[1-5]?", value, re.IGNORECASE)
-            if tone_mark_re.search(value) or any(re.search(r"[1-5]$", t) for t in tokens) or len(tokens) >= 2:
+            if tone_mark_re.search(value) or any(re.search(r"[1-5]$", t) for t in tokens):
                 return value
     return ""
 
