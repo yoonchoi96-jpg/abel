@@ -13,7 +13,7 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-from naver_wordbook_sync import DB_PATH, init_db, now_iso
+from abel_wordbook_db import DB_PATH, init_db, now_iso
 
 ROOT = Path(__file__).resolve().parents[1]
 LEVEL6_CSV = ROOT / "data" / "hsk30_level6_1140.csv"

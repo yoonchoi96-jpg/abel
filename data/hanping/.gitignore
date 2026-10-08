@@ -1,0 +1,3 @@
+# Local Hanping exports and normalized snapshots are private user data.
+*
+!.gitignore

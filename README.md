@@ -32,17 +32,88 @@ HSK numbered Naver volumes are grouped: `신HSK_5급 필수단어 1~5탄` → `�
 - `scripts/hsk30_sync.py`: imports both collections into the same SQLite schema.
 - `.github/workflows/hsk30-sync.yml`: scheduled daily at 07:00 KST.
 
-## Naver data boundary
+## Hanping ingestion and automatic routing
 
-Abel intentionally does not automate access to the user's Naver account. It does not use GitHub Actions, a self-hosted runner, Playwright login, stored Naver sessions, or `NAVER_STORAGE_STATE_B64` to access the account.
+Hanping is the vocabulary capture UI; Abel owns normalization, canonical identity and downstream routing.
 
-The canonical repository input is `data/naver_wordbook.json`. Any future Naver-side collection must use a user-controlled and explicitly permitted mechanism, then import the resulting data into Abel.
+Hanping's official Import/Export Vocab File feature is the supported machine-readable boundary. Cloud Backup remains a user-controlled backup feature; Abel does not log into Hanping or decrypt private cloud data.
 
-Never put Naver passwords, cookies, storage state, or browser profiles in GitHub or GitHub Secrets.
+The intended local flow is now:
 
-## Commands
+```
+Hanping
+  ↓ official/user export
+iCloud Drive / Downloads / Documents
+  ↓ automatic local discovery
+hanping_vocab_import.py
+  ↓
+hanping_db_sync.py
+  ↓
+hanping_router.py
+  ├─ hsk30_level6
+  ├─ hsk30_level7_9
+  ├─ tocfl
+  ├─ existing
+  └─ new
+  ↓
+shared Abel SQLite
+  ↓
+Obsidian / downstream enrichment
+```
 
-No Naver login, browser automation, session export, or collection command is part of the production Abel repository anymore. `data/naver_wordbook.json` is treated as an imported data boundary.
+The router consults the shared canonical DB using headword + pinyin when available, then falls back to deterministic existing-word matching. Hanping star/tag/note/traditional/pinyin data is preserved separately from canonical lexical data.
+
+### One-command scan
+
+```bash
+python scripts/hanping_auto_sync.py
+```
+
+The watcher scans common Mac locations for new JSON/CSV/TSV/TXT exports and processes each content hash only once.
+
+For continuous background polling:
+
+```bash
+python scripts/hanping_auto_sync.py --watch
+```
+
+A future macOS LaunchAgent can run the watcher automatically at login. No credentials are required.
+
+The normalizer accepts JSON, CSV, TSV, and plain text. The normalized snapshot is written to `data/hanping/normalized.json`, which is intentionally git-ignored.
+
+Hanping account authentication, OTP handling, cookies, browser-session capture, and private cloud decryption are deliberately outside Abel.
+
+## Naver wordbook sync
+
+Naver remains the primary vocabulary capture UI for Abel.
+
+The production flow is:
+
+```text
+Naver 중국어 개인 단어장
+  ↓ authenticated Chrome session on the user's Mac
+scripts/naver_wordbook_sync.py
+  ↓
+SQLite + raw snapshots
+  ↓
+data/naver_wordbook.json
+  ↓
+Obsidian / downstream learning tools
+```
+
+The collector preserves multiple wordbooks as first-class collections, globally deduplicates words, and keeps many-to-many wordbook membership. HSK numbered Naver volumes are grouped into `신HSK 5급` and `신HSK 6급`.
+
+### Commands
+
+```bash
+python scripts/naver_wordbook_sync.py --bootstrap
+python scripts/naver_wordbook_sync.py --probe
+python scripts/naver_wordbook_sync.py --sync
+```
+
+The authenticated browser profile stays on the user's Mac under `~/.naver_wordbook/browser_profile`. It is never committed to GitHub.
+
+The scheduled workflow runs on the self-hosted Mac runner labeled `self-hosted`, `macOS`, and `naver-wordbook`.
 
 ## Security
 
