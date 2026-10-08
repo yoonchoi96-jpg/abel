@@ -263,3 +263,84 @@ def test_naver_and_hanping_share_one_canonical_word_and_independent_memberships(
             "SELECT COUNT(*) FROM wordbook_words WHERE word_id=?",
             (word_id,),
         ).fetchone()[0] == 0
+
+
+def test_naver_and_hanping_keep_cross_source_homographs_separate(
+    tmp_path: Path, monkeypatch
+):
+    db_root = tmp_path / "db"
+    db_path = db_root / "abel.sqlite3"
+    monkeypatch.setattr(mod, "DATA_ROOT", db_root)
+    monkeypatch.setattr(mod, "DB_PATH", db_path)
+
+    import scripts.hanping_db_sync as hanping_mod
+    import scripts.abel_wordbook_db as db_layer
+    monkeypatch.setattr(db_layer, "DB_PATH", db_path)
+    monkeypatch.setattr(hanping_mod, "DB_PATH", db_path)
+
+    hanping_mod.init_db()
+    mod.upsert_db(
+        [
+            {
+                "word": "行",
+                "meaning": "行走",
+                "pronunciation": "xing2",
+                "wordbook_id": "wb-x",
+                "wordbook": "내 단어",
+                "source_url": "",
+            },
+            {
+                "word": "行",
+                "meaning": "은행",
+                "pronunciation": "hang2",
+                "wordbook_id": "wb-h",
+                "wordbook": "내 단어",
+                "source_url": "",
+            },
+        ],
+        [
+            {"naver_id": "wb-x", "name": "내 단어", "source_url": ""},
+            {"naver_id": "wb-h", "name": "내 단어", "source_url": ""},
+        ],
+    )
+
+    payload = tmp_path / "hanping.json"
+    import json
+    payload.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "source": "hanping",
+                "words": [
+                    {
+                        "hanzi": "行",
+                        "pinyin": "hang2",
+                        "traditional": "行",
+                        "starred": True,
+                        "tags": [],
+                        "note": "",
+                        "record_hash": "homograph-hang2",
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    stats = hanping_mod.sync(payload)
+    assert stats["inserted"] == 0
+    assert stats["updated"] == 1
+
+    with sqlite3.connect(db_path) as db:
+        rows = db.execute(
+            "SELECT id, pronunciation, meaning FROM words WHERE word='行' ORDER BY id"
+        ).fetchall()
+        assert {(pron, meaning) for _, pron, meaning in rows} == {
+            ("xing2", "行走"),
+            ("hang2", "银行"),
+        }
+        hang_id = next(row[0] for row in rows if row[1] == "hang2")
+        assert db.execute(
+            "SELECT COUNT(*) FROM hanping_vocab WHERE word_id=?",
+            (hang_id,),
+        ).fetchone()[0] == 1
