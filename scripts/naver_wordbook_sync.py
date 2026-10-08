@@ -543,7 +543,7 @@ def normalize_pronunciation(value: str) -> str:
     Keep tone digits/marks intact; only collapse browser whitespace and common
     punctuation so the value can be used as the cross-source lexical key.
     """
-    value = re.sub(r"\\s+", " ", (value or "").strip())
+    value = re.sub(r"\s+", " ", (value or "").strip())
     value = value.strip(" /|·•,;:")
     return value
 
