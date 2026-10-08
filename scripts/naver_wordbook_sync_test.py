@@ -344,3 +344,19 @@ def test_naver_and_hanping_keep_cross_source_homographs_separate(
             "SELECT COUNT(*) FROM hanping_vocab WHERE word_id=?",
             (hang_id,),
         ).fetchone()[0] == 1
+
+
+
+def test_normalize_pronunciation_keeps_pinyin_tones_and_rejects_plain_metadata():
+    assert mod.normalize_pronunciation("  wéi   hù  ") == "wéi hù"
+    assert mod.normalize_pronunciation("wei2 hu4") == "wei2 hu4"
+
+
+def test_pronunciation_extractor_requires_explicit_pinyin_signal():
+    class Dummy:
+        def locator(self, _selector):
+            raise AssertionError("selector fallback is not used in this pure signal test")
+
+    assert mod.normalize_pronunciation("wéi hù") == "wéi hù"
+    assert mod.normalize_pronunciation("wei2 hu4") == "wei2 hu4"
+    assert mod.normalize_pronunciation("study word") == "study word"
