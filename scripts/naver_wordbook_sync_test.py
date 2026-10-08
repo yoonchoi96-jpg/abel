@@ -357,6 +357,6 @@ def test_pronunciation_extractor_requires_explicit_pinyin_signal():
         def locator(self, _selector):
             raise AssertionError("selector fallback is not used in this pure signal test")
 
-    assert mod.normalize_pronunciation("wéi hù") == "wéi hù"
+    assert mod.normalize_pronunciation("wéi hù") == "wei2 hu4"
     assert mod.normalize_pronunciation("wei2 hu4") == "wei2 hu4"
     assert mod.normalize_pronunciation("study word") == "study word"
