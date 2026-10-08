@@ -606,12 +606,14 @@ def extract_pronunciation(el, raw: str, lines_: list[str]) -> str:
         value = normalize_pronunciation(candidate)
         if not value or len(value) > 120:
             continue
-        if tone_mark_re.search(value) or re.fullmatch(r"[a-züv1-5\s'’-]+", value, re.IGNORECASE):
-            # Require either a tone marker/digit or at least two syllable-like
-            # tokens. This keeps ordinary English/Korean metadata out.
-            tokens = re.findall(r"[a-züv]+[1-5]?", value, re.IGNORECASE)
-            if tone_mark_re.search(value) or any(re.search(r"[1-5]$", t) for t in tokens):
-                return value
+        if tone_mark_re.search(candidate):
+            return value
+        # Numeric pinyin must be composed of pinyin-like syllables with a
+        # terminal tone digit. Do not accept arbitrary Latin metadata such as
+        # "version2" or "lesson 1" just because it contains a digit.
+        if not re.fullmatch(r"[a-züv]+[1-5](?:\s+[a-züv]+[1-5])*", value, re.IGNORECASE):
+            continue
+        return value
     return ""
 
 
