@@ -134,3 +134,132 @@ def test_upsert_preserves_hanping_membership_when_naver_removes_word(tmp_path: P
                JOIN wordbooks wb ON wb.id=ww.wordbook_id
                WHERE wb.name='내가 찾은 단어'"""
         ).fetchone()[0] == 0
+
+
+def test_naver_and_hanping_share_one_canonical_word_and_independent_memberships(
+    tmp_path: Path, monkeypatch
+):
+    db_root = tmp_path / "db"
+    db_path = db_root / "abel.sqlite3"
+
+    monkeypatch.setattr(mod, "DATA_ROOT", db_root)
+    monkeypatch.setattr(mod, "DB_PATH", db_path)
+
+    import scripts.hanping_db_sync as hanping_mod
+    import scripts.abel_wordbook_db as db_layer
+
+    monkeypatch.setattr(db_layer, "DB_PATH", db_path)
+    monkeypatch.setattr(hanping_mod, "DB_PATH", db_path)
+
+    naver = {
+        "naver_id": "wb-shared",
+        "name": "내가 찾은 단어",
+        "source_url": "https://example.test/wb-shared",
+    }
+    naver_card = {
+        "word": "维护",
+        "meaning": "유지하다",
+        "pronunciation": "wei2 hu4",
+        "part_of_speech": "동사",
+        "example": "",
+        "wordbook_id": "wb-shared",
+        "wordbook": "내가 찾은 단어",
+        "source_url": naver["source_url"],
+    }
+
+    hanping_mod.init_db()
+    mod.upsert_db([naver_card], [naver])
+
+    import json
+    hanping_input = tmp_path / "hanping.json"
+    hanping_input.write_text(
+        json.dumps({
+            "schema_version": 1,
+            "source": "hanping",
+            "words": [{
+                "source": "hanping",
+                "hanzi": "维护",
+                "simplified": "维护",
+                "traditional": "維護",
+                "pinyin": "wei2 hu4",
+                "starred": True,
+                "tags": ["HSK6"],
+                "note": "같은 단어",
+                "record_hash": "shared-1",
+            }],
+        }, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    assert hanping_mod.sync(hanping_input) == {
+        "inserted": 0,
+        "updated": 1,
+        "total": 1,
+    }
+
+    with sqlite3.connect(db_path) as db:
+        assert db.execute(
+            "SELECT COUNT(*) FROM words WHERE word='维护'"
+        ).fetchone()[0] == 1
+        word_id = db.execute(
+            "SELECT id FROM words WHERE word='维护' AND pronunciation='wei2 hu4'"
+        ).fetchone()[0]
+
+        assert db.execute(
+            """SELECT COUNT(*)
+               FROM wordbook_words ww
+               JOIN wordbooks wb ON wb.id=ww.wordbook_id
+               WHERE wb.name='내가 찾은 단어' AND ww.word_id=?""",
+            (word_id,),
+        ).fetchone()[0] == 1
+        assert db.execute(
+            """SELECT COUNT(*)
+               FROM wordbook_words ww
+               JOIN wordbooks wb ON wb.id=ww.wordbook_id
+               WHERE wb.name='Hanping' AND ww.word_id=?""",
+            (word_id,),
+        ).fetchone()[0] == 1
+
+    mod.upsert_db([], [naver])
+
+    with sqlite3.connect(db_path) as db:
+        assert db.execute(
+            "SELECT COUNT(*) FROM words WHERE id=?", (word_id,)
+        ).fetchone()[0] == 1
+        assert db.execute(
+            """SELECT COUNT(*)
+               FROM wordbook_words ww
+               JOIN wordbooks wb ON wb.id=ww.wordbook_id
+               WHERE wb.name='내가 찾은 단어' AND ww.word_id=?""",
+            (word_id,),
+        ).fetchone()[0] == 0
+        assert db.execute(
+            """SELECT COUNT(*)
+               FROM wordbook_words ww
+               JOIN wordbooks wb ON wb.id=ww.wordbook_id
+               WHERE wb.name='Hanping' AND ww.word_id=?""",
+            (word_id,),
+        ).fetchone()[0] == 1
+
+    hanping_empty = tmp_path / "hanping-empty.json"
+    hanping_empty.write_text(
+        json.dumps(
+            {"schema_version": 1, "source": "hanping", "words": []},
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    assert hanping_mod.sync(hanping_empty) == {
+        "inserted": 0,
+        "updated": 0,
+        "total": 0,
+    }
+
+    with sqlite3.connect(db_path) as db:
+        assert db.execute(
+            "SELECT COUNT(*) FROM words WHERE id=?", (word_id,)
+        ).fetchone()[0] == 1
+        assert db.execute(
+            "SELECT COUNT(*) FROM wordbook_words WHERE word_id=?",
+            (word_id,),
+        ).fetchone()[0] == 0
