@@ -337,7 +337,7 @@ def test_naver_and_hanping_keep_cross_source_homographs_separate(
         ).fetchall()
         assert {(pron, meaning) for _, pron, meaning in rows} == {
             ("xing2", "行走"),
-            ("hang2", "银行"),
+            ("hang2", "은행"),
         }
         hang_id = next(row[0] for row in rows if row[1] == "hang2")
         assert db.execute(
