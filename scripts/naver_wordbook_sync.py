@@ -557,9 +557,16 @@ def normalize_pronunciation(value: str) -> str:
     }
     for marked, numbered in tone_map.items():
         value = value.replace(marked, numbered)
-    # Move a generated tone digit to the end of its syllable: wéi -> wei2.
-    value = re.sub(r"([a-zü]+)([1-5])([a-zü]+)", r"\1\3\2", value, flags=re.IGNORECASE)
-    return value.lower()
+    # A tone-mark replacement inserts the digit where the marked vowel was
+    # (wéi -> we2i). Normalize each whitespace-delimited syllable by moving
+    # its single tone digit to the end; already-numbered pinyin stays stable.
+    normalized_tokens = []
+    for token in value.split(" "):
+        digits = re.findall(r"[1-5]", token)
+        if len(digits) == 1:
+            token = token.replace(digits[0], "") + digits[0]
+        normalized_tokens.append(token)
+    return " ".join(normalized_tokens).lower()
 
 
 def extract_pronunciation(el, raw: str, lines_: list[str]) -> str:
