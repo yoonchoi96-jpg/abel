@@ -387,6 +387,7 @@ def test_extract_pronunciation_accepts_numeric_or_tone_marked_pinyin():
     assert mod.extract_pronunciation(Dummy("study word"), "", ["维护"]) == ""
     assert mod.extract_pronunciation(Dummy("version2"), "", ["维护"]) == ""
     assert mod.extract_pronunciation(Dummy("lesson 1"), "", ["维护"]) == ""
+    assert mod.extract_pronunciation(Dummy("xing2"), "", ["维护"]) == "xing2"
 
 
 def test_pronunciation_extractor_requires_explicit_pinyin_signal():
