@@ -754,11 +754,22 @@ def save_snapshot(mode, page, cards, wordbooks, network) -> Path:
     return path
 
 def upsert_db(cards, wordbooks):
+    """Apply the latest Naver snapshot, including deletions.
+
+    Naver personal wordbooks are authoritative snapshots: if a word that was
+    previously in an observed Naver wordbook is absent from the latest full
+    collection for that wordbook, remove only that wordbook membership.
+    Never delete the canonical words row because another Naver wordbook,
+    Hanping, HSK/TOCFL, or another source may still own the word.
+    """
     init_db()
     now = now_iso()
     with sqlite3.connect(DB_PATH) as db:
         db.execute("PRAGMA foreign_keys=ON")
         wb_map = {}
+        observed_books = set()
+        incoming_by_book = {}
+
         for wb in wordbooks:
             raw_name = wb.get("name") or "단어장"
             name = normalize_wordbook_name(raw_name)
@@ -774,10 +785,16 @@ def upsert_db(cards, wordbooks):
                 ON CONFLICT(naver_id,name) DO UPDATE SET
                   source_url=excluded.source_url,last_seen=excluded.last_seen,raw_json=excluded.raw_json
             """, (db_nid,name,wb.get("source_url",""),now,now,json.dumps(wb,ensure_ascii=False)))
-            row = db.execute("SELECT id FROM wordbooks WHERE naver_id IS ? AND name=?", (db_nid,name)).fetchone()
+            row = db.execute(
+                "SELECT id FROM wordbooks WHERE naver_id IS ? AND name=?",
+                (db_nid,name),
+            ).fetchone()
             if row:
-                wb_map[(nid,raw_name)] = row[0]
-                wb_map[(nid,name)] = row[0]
+                wbid = row[0]
+                observed_books.add(wbid)
+                incoming_by_book.setdefault(wbid, set())
+                wb_map[(nid,raw_name)] = wbid
+                wb_map[(nid,name)] = wbid
 
         for c in cards:
             word, meaning = c.get("word",""), c.get("meaning","")
@@ -790,18 +807,42 @@ def upsert_db(cards, wordbooks):
                   raw_json=excluded.raw_json
             """, (word,meaning,c.get("pronunciation",""),c.get("part_of_speech",""),
                   c.get("example",""),c.get("source_url",""),now,now,json.dumps(c,ensure_ascii=False)))
-            wid = db.execute("SELECT id FROM words WHERE word=? AND meaning=?", (word,meaning)).fetchone()[0]
+            wid = db.execute(
+                "SELECT id FROM words WHERE word=? AND meaning=?",
+                (word,meaning),
+            ).fetchone()[0]
             nid = c.get("wordbook_id") or None
             raw_name = c.get("wordbook") or "단어장"
             name = normalize_wordbook_name(raw_name)
             wbid = wb_map.get((nid,raw_name)) or wb_map.get((nid,name))
             if wbid:
+                incoming_by_book.setdefault(wbid, set()).add(wid)
                 db.execute("""
                     INSERT INTO wordbook_words(wordbook_id,word_id,first_seen,last_seen,raw_json)
                     VALUES(?,?,?,?,?)
                     ON CONFLICT(wordbook_id,word_id) DO UPDATE SET
                       last_seen=excluded.last_seen,raw_json=excluded.raw_json
                 """, (wbid,wid,now,now,json.dumps(c,ensure_ascii=False)))
+
+        # Reconcile every wordbook successfully discovered in this snapshot.
+        # Empty incoming sets are intentional: an empty Naver wordbook means
+        # all previous memberships for that wordbook were removed by the user.
+        for wbid in observed_books:
+            incoming = incoming_by_book.get(wbid, set())
+            if incoming:
+                placeholders = ",".join("?" for _ in incoming)
+                db.execute(
+                    f"""DELETE FROM wordbook_words
+                        WHERE wordbook_id=?
+                          AND word_id NOT IN ({placeholders})""",
+                    [wbid, *sorted(incoming)],
+                )
+            else:
+                db.execute(
+                    "DELETE FROM wordbook_words WHERE wordbook_id=?",
+                    (wbid,),
+                )
+
         db.commit()
 
 def write_repo_export(cards, wordbooks, snapshot_path):
