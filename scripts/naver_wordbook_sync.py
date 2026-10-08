@@ -537,6 +537,67 @@ def page_url_for_wordbook(nid: str, name: str) -> str:
         + "&tab=list&page=1"
     )
 
+def normalize_pronunciation(value: str) -> str:
+    """Normalize a visible Naver pinyin/pronunciation string.
+
+    Keep tone digits/marks intact; only collapse browser whitespace and common
+    punctuation so the value can be used as the cross-source lexical key.
+    """
+    value = re.sub(r"\\s+", " ", (value or "").strip())
+    value = value.strip(" /|·•,;:")
+    return value
+
+
+def extract_pronunciation(el, raw: str, lines_: list[str]) -> str:
+    """Read pronunciation from explicit Naver DOM fields before text fallback.
+
+    Naver has changed card class names across SPA revisions, so selectors are
+    intentionally semantic/partial. We only accept text that looks like
+    pinyin, avoiding arbitrary English/Korean card metadata.
+    """
+    selectors = [
+        ".pronunciation", ".pinyin", "[class*='pronunciation']",
+        "[class*='pinyin']", "[data-pinyin]", "[data-pronunciation]",
+    ]
+    candidates = []
+    for selector in selectors:
+        try:
+            loc = el.locator(selector)
+            for i in range(min(loc.count(), 10)):
+                item = loc.nth(i)
+                if not item.is_visible():
+                    continue
+                text = visible_text(item)
+                if text:
+                    candidates.append(text)
+                for attr_name in ("data-pinyin", "data-pronunciation", "title", "aria-label"):
+                    value = attr(item, attr_name)
+                    if value:
+                        candidates.append(value)
+        except Exception:
+            continue
+
+    candidates.extend(lines_[1:])
+    # Tone-mark and numbered pinyin are strong signals. This deliberately does
+    # not invent pronunciation from an arbitrary Latin-only line.
+    pinyin_re = re.compile(
+        r"^(?:(?:[a-züv]+[1-5]?)(?:[\\s'’-]+|$))+",
+        re.IGNORECASE,
+    )
+    tone_mark_re = re.compile(r"[āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜĀÁǍÀĒÉĚÈĪÍǏÌŌÓǑÒŪÚǓÙÜǕǗǙǛ]")
+    for candidate in candidates:
+        value = normalize_pronunciation(candidate)
+        if not value or len(value) > 120:
+            continue
+        if tone_mark_re.search(value) or re.fullmatch(r"[a-züv1-5\\s'’-]+", value, re.IGNORECASE):
+            # Require either a tone marker/digit or at least two syllable-like
+            # tokens. This keeps ordinary English/Korean metadata out.
+            tokens = re.findall(r"[a-züv]+[1-5]?", value, re.IGNORECASE)
+            if tone_mark_re.search(value) or any(re.search(r"[1-5]$", t) for t in tokens) or len(tokens) >= 2:
+                return value
+    return ""
+
+
 def extract_cards(page, wordbook: dict) -> list[dict]:
     selectors = [
         ".card_word",
@@ -590,7 +651,7 @@ def extract_cards(page, wordbook: dict) -> list[dict]:
                 cards.append({
                     "word": word,
                     "meaning": meaning,
-                    "pronunciation": "",
+                    "pronunciation": extract_pronunciation(el, raw, ls),
                     "part_of_speech": "",
                     "example": "\n".join(ls[2:]),
                     "wordbook_id": wordbook.get("naver_id", ""),
