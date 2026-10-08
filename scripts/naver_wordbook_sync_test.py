@@ -355,6 +355,38 @@ def test_normalize_pronunciation_keeps_pinyin_tones_and_rejects_plain_metadata()
     assert mod.normalize_pronunciation("wei2 hu4") == "wei2 hu4"
 
 
+def test_extract_pronunciation_accepts_numeric_or_tone_marked_pinyin():
+    class DummyItem:
+        def __init__(self, text):
+            self.text = text
+        def is_visible(self):
+            return True
+        def inner_text(self, timeout=700):
+            return self.text
+        def get_attribute(self, name):
+            return ""
+
+    class DummyLocator:
+        def __init__(self, text):
+            self.item = DummyItem(text)
+        def count(self):
+            return 1
+        def nth(self, _):
+            return self.item
+
+    class Dummy:
+        def __init__(self, text):
+            self.text = text
+        def locator(self, selector):
+            if selector == ".pinyin":
+                return DummyLocator(self.text)
+            raise AssertionError("unexpected selector")
+
+    assert mod.extract_pronunciation(Dummy("wéi hù"), "", ["维护"]) == "wei2 hu4"
+    assert mod.extract_pronunciation(Dummy("wei2 hu4"), "", ["维护"]) == "wei2 hu4"
+    assert mod.extract_pronunciation(Dummy("study word"), "", ["维护"]) == ""
+
+
 def test_pronunciation_extractor_requires_explicit_pinyin_signal():
     class Dummy:
         def locator(self, _selector):
