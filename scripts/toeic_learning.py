@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Import the user's corrected TOEIC TSV, plan ten review-balanced practice rounds.
 
-The personal wordbook is *not* committed to public GitHub. Read it locally or
-from an explicitly exported private Drive file. Never invent questions/answers.
+The user-approved corrected TOEIC wordbook is committed under data/toeic/.
+Private learner answers and grading history must still remain private.
+Never invent questions or answer keys.
 """
 from __future__ import annotations
 
@@ -122,7 +123,8 @@ def plan_rounds(corpus, rounds=10):
         "exam_system": "TOEIC",
         "mode": "personal_50_question_practice_not_official_TOEIC",
         "vocabulary_count": len(corpus["words"]),
-        "requires_private_wordbook": True,
+        "requires_private_wordbook": False,
+        "vocabulary_file": "data/toeic/wordbook_1086.json",
         "rounds": result,
     }
 
