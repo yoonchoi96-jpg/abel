@@ -10,10 +10,13 @@ English/Speaking/TOEIC and English/Writing/TOEIC.
 
 ## Privacy and source
 
-The source is the USER-CORRECTED 72-photo TOEIC vocabulary TXT (approximately
-1,086 entries). Do not place this personal data in the public GitHub repo.
-Keep the corrected TXT, normalized JSON, tests, answer keys, and learner
-results under private/toeic/ (gitignored). The adapter preserves original
+The user explicitly approved publishing the corrected 72-photo wordbook.
+The source files now live in GitHub under data/toeic/:
+- data/toeic/corrected_wordbook.txt (source table)
+- data/toeic/wordbook_1086.json (1,086 analyzed vocabulary entries)
+- data/toeic/ten_rounds.json (10-round practice allocation)
+Only learner answers, generated instructor answer keys, and progress history
+should remain under private/toeic/ (gitignored). The adapter preserves original
 rank, Korean meaning, source photo/row, confidence, review status and the
 yellow/blue/red/green learning marks. P1..P5 must match the distinct mark
 count; rank is determined by number of colors first, latest colored review
@@ -26,15 +29,15 @@ are eligible. Never hallucinate a source word or missing colored mark.
 
 ## Commands from repository root
 
-1) Import private TXT:
+1) Import the GitHub-tracked corrected TXT, or use the ready-made JSON:
 
-    python scripts/toeic_learning.py import "private/toeic/TOEIC_전체72장_사용자교정반영_최종검토본.txt" --out private/toeic/vocabulary.json
+    python scripts/toeic_learning.py import data/toeic/corrected_wordbook.txt --out private/toeic/vocabulary.json
 
-2) Split all vocabulary into ten balanced study rounds:
+2) Use the committed ten_rounds.json or rebuild all ten study rounds:
 
     python scripts/toeic_learning.py plan private/toeic/vocabulary.json --out private/toeic/ten_rounds.json
 
-3) Create Gemini/Abel provider request for original multiple-choice exam:
+3) Generate an Abel/Gemini provider request for original multiple-choice practice:
 
     python scripts/toeic_learning.py request private/toeic/vocabulary.json private/toeic/ten_rounds.json --round 1 --skill reading --out private/toeic/round01_request.json
 
@@ -105,3 +108,18 @@ snapshot process rather than ephemeral container SQLite.
 
 The assistant has not configured unattended provider calls, uploaded
 private vocabulary to the public repo, or deployed the MCP service.
+
+## Published data quickstart
+
+The three TOEIC source files are already versioned in GitHub.
+After git pull, no external Drive import is necessary:
+
+    mkdir -p private/toeic
+    python scripts/toeic_learning.py request data/toeic/wordbook_1086.json data/toeic/ten_rounds.json --round 1 --skill reading --out private/toeic/round01_request.json
+
+To regenerate the ten-round plan locally:
+
+    python scripts/toeic_learning.py plan data/toeic/wordbook_1086.json --out private/toeic/ten_rounds_regenerated.json
+
+The 68 entries needing manual review remain in the public wordbook for
+study, but are NOT eligible as authoritative answer-key targets.
