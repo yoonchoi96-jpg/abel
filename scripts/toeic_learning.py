@@ -102,8 +102,7 @@ def plan_rounds(corpus, rounds=10):
         eligible = [w for w in pool if w["eligible_for_answer_key"]]
         if len(eligible) < sum(QUOTAS.values()):
             raise ValueError(f"round {idx + 1}: fewer than 50 eligible terms")
-        repeated = ([focus[(idx * 11 + j) % len(focus)] for j in range(min(12, len(focus)))])
-                    if focus else [])
+        repeated = [focus[(idx * 11 + j) % len(focus)] for j in range(min(12, len(focus)))] if focus else []
         result.append({
             "round": idx + 1, "id": f"toeic-personal-{idx + 1:02d}",
             "difficulty": ("basic" if idx < 2 else "intermediate" if idx < 4
