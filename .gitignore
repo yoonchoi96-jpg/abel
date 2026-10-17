@@ -17,3 +17,7 @@ data/naver_wordbook.json
 .navery/
 .browser/
 naver_wordbook_profile/
+
+# Private TOEIC wordbooks, answer keys, generated exams and learner answers
+private/
+data/toeic_*.json

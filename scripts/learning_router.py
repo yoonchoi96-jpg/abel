@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 LANGUAGE_LABELS = {
     "zh": "Chinese", "zh-cn": "Chinese", "zh_cn": "Chinese", "chinese": "Chinese",
+    "en": "English", "en-us": "English", "en_us": "English", "english": "English",
     "es": "Spanish", "es-es": "Spanish", "spanish": "Spanish",
     "fr": "French", "fr-fr": "French", "french": "French",
 }
@@ -35,7 +36,7 @@ def normalize_language(value: str) -> tuple[str, str]:
     if key not in LANGUAGE_LABELS:
         raise ValueError(f"Unsupported learning language: {value!r}")
     label = LANGUAGE_LABELS[key]
-    code = {"Chinese": "zh-CN", "Spanish": "es", "French": "fr"}[label]
+    code = {"Chinese": "zh-CN", "English": "en-US", "Spanish": "es", "French": "fr"}[label]
     return code, label
 
 def normalize_skill(value: str) -> str:
