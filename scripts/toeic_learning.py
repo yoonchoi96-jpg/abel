@@ -198,7 +198,13 @@ def generation_request(corpus, plan, round_number, skill="reading"):
     return {
         "schema_version": "abel.toeic.generation-request.v1", "language": LANGUAGE,
         "level": LEVEL, "exam_system": "TOEIC", "round": round_number,
-        "skill": skill, "source_of_truth": "Abel",
+        "skill": skill, "source_of_truth": "Abel", "task_type": "mock_test",
+        "prompt": ("Create ORIGINAL validated TOEIC practice content as JSON only. "
+                   "Use only the approved vocabulary ids as answer-key targets. "
+                   "Follow all required rules and output fields. "
+                   "The exam writer MUST NOT reveal the instructor answers to students.\n"
+                   + json.dumps({"rules": rules, "expected_result_shape": required,
+                                 "allowed_vocabulary": refs}, ensure_ascii=False)),
         "profile": "personal-practice" if skill == "reading" else "official-structure-inspired",
         "allowed_vocabulary": refs,
         "rules": rules, "expected_result_shape": required,
