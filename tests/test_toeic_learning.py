@@ -114,7 +114,7 @@ def test_bad_question_and_wrong_source_blocked():
     with pytest.raises(ValueError, match="answer"):
         validate_paper(paper, entry)
     paper = make_paper(entry)
-    paper["questions"][1]["section"] = "vocabulary"
+    paper["questions"][15]["section"] = "vocabulary"
     with pytest.raises(ValueError, match="quota"):
         validate_paper(paper, entry)
 
