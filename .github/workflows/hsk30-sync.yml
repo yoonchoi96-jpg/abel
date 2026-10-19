@@ -1,14 +1,7 @@
 name: HSK 3.0 Vocabulary Sync
 
 on:
-  push:
-    paths:
-      - ".github/workflows/hsk30-sync.yml"
-      - "scripts/hsk30_sync.py"
   workflow_dispatch:
-  schedule:
-    - cron: "0 22 * * *"
-
 permissions:
   contents: write
 

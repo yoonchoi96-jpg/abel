@@ -1,10 +1,6 @@
 name: Experimental Gemini TTS Dialogue
 
 on:
-  push:
-    paths:
-      - "scripts/gemini_tts_dialogue.py"
-      - ".github/workflows/gemini-tts-dialogue.yml"
   workflow_dispatch:
 
 jobs:

@@ -1,10 +1,6 @@
 name: Experimental Gemini TTS A/B
 
 on:
-  push:
-    paths:
-      - "scripts/gemini_tts_ab.py"
-      - ".github/workflows/gemini-tts-ab.yml"
   workflow_dispatch:
 
 jobs:
