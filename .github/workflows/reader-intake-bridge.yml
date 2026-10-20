@@ -1,0 +1,45 @@
+name: Reader intake using existing private Drive
+"on":
+  workflow_dispatch:
+    inputs:
+      request_doc_id:
+        description: "Private Drive source-request Google Doc ID (never paste its signed download URL)"
+        required: true
+        type: string
+      output_folder_id:
+        description: "Optional existing private Drive output folder ID; empty creates a dedicated folder"
+        required: false
+        default: ""
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: reader-intake-drive-state
+  cancel-in-progress: false
+jobs:
+  intake:
+    if: github.event.repository.private == false && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout validated Abraham intake code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: yoonchoi96-jpg/abraham
+          ref: b910a05938b0208b6a276a82d41e0e42e4776e51
+          path: reader-code
+          persist-credentials: false
+      - name: Install metadata parser
+        run: python3 -m pip install --disable-pip-version-check PyYAML==6.0.3
+      - name: Process Reader export and persist immutable private Drive commit
+        env:
+          GOOGLE_DRIVE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_OAUTH_CLIENT_ID }}
+          GOOGLE_DRIVE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN }}
+          READER_REQUEST_DOC_ID: ${{ inputs.request_doc_id }}
+          READER_DRIVE_FOLDER_ID: ${{ inputs.output_folder_id }}
+          READER_PUBLIC_STANDARD_RUNNER: "true"
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python3 reader-code/scripts/reader_intake.py --cloud
+      # Existing Drive OAuth only. No GCP, Gemini, TTS, DeepSeek, state migration,
+      # public artifacts, caches, data commits, release upload or scheduled trigger.
