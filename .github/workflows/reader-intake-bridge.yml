@@ -26,7 +26,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: yoonchoi96-jpg/abraham
-          ref: b910a05938b0208b6a276a82d41e0e42e4776e51
+          ref: 7133484bfce555053a9127b706a4c4514c682da8
           path: reader-code
           persist-credentials: false
       - name: Install metadata parser
