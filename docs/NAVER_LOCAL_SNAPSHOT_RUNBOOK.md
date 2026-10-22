@@ -212,3 +212,58 @@ To verify this progress output on Mac:
 
 The new folder-switching test uses only synthetic cards and fake
 response objects; actual live end-to-end verification is still pending.
+
+
+## Resumable, incremental owner-local sync (experimental)
+
+The initial all-folder browser collection is NOT the intended recurring
+operating mode. A private per-folder checkpoint is now stored only on Mac:
+
+    ~/Library/Application Support/Abel/Wordbooks/checkpoint.json
+
+It contains private wordbook card JSON and must NEVER be committed to
+GitHub or moved to Drive. The file is created with owner-only permissions.
+
+The collector now:
+1. Reads the authenticated wordbook folder index each run.
+2. Compares each folder's ID, name, wordCount, updateTimestamp,
+   lastWordTimestamp, lastReciteTimestamp, lastLearnTimestamp to its saved
+   checkpoint.
+3. Reuses that folder's locally verified card pages when these markers
+   are unchanged and the cache integrity and page/identity checks pass.
+4. Re-reads changed/uncached folders through the first-party website UI.
+5. Saves a private checkpoint as soon as each entire folder finishes.
+   If the owner stops halfway through 19 folders, a later run can skip
+   previously completed folders that still match their metadata.
+6. Forces a fresh page traversal if a checkpoint is more than seven days
+   old, so cached data is periodically revalidated.
+7. Recalculates cross-folder P1/P2/P3/P4 membership only after all
+   current folder data is complete. The verified snapshot remains
+   fail-closed if any folder/page fails.
+
+Manual first-run session setup:
+
+    python -u scripts/naver_wordbook_collect.py
+
+After successful login setup, a subsequent *one-shot* noninteractive run:
+
+    python -u scripts/naver_wordbook_collect.py --unattended
+
+The --unattended option reuses the local Chromium profile, launches it
+headlessly, and DOES NOT request terminal Enter. If Naver expires the
+session, the sync must fail safely; an owner-driven login is needed again.
+To force a full audit deliberately:
+
+    python -u scripts/naver_wordbook_collect.py --unattended --full-refresh
+
+IMPORTANT: --unattended permits a noninteractive invocation but DOES NOT
+install launchd, schedule recurring runs or make the service cloud-hosted.
+The Naver service's updateTimestamp / last* marker semantics still need
+verification against a real added/edited/deleted card. In-place content
+changes that do not update any marker may go undetected until the
+seven-day full refresh. Do not call this guaranteed real-time sync.
+
+The interrupted run reported before this checkpoint feature was deployed
+did not create reusable checkpoints. The completed first two folders from
+that old run must be collected one more time, then subsequent interrupted
+runs can resume.
