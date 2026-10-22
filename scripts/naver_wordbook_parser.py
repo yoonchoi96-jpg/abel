@@ -190,19 +190,31 @@ def validate_folder_pages(folder_id, pages, expected_total):
             if not isinstance(card, dict) or card.get("wordbookId") != folder_id:
                 raise NaverSchemaError("card folder ID does not match page")
             all_cards.append(card)
-    if (len(returned_pages) != (reported_page_total or 1)
+    if reported_page_total == 0:
+        # Some backends emit a single empty page for empty wordbooks.
+        valid_page_numbers = [{0}, {1}] if expected_total == 0 else []
+    else:
+        valid_page_numbers = [
+            set(range(reported_page_total)),
+            set(range(1, reported_page_total + 1)),
+        ]
+    if (returned_pages not in valid_page_numbers
             or len(all_cards) != expected_total):
-        raise NaverSchemaError("missing pages or card-count mismatch")
+        raise NaverSchemaError("missing/noncontiguous pages or card-count mismatch")
     seen_cards = [x.get("id") for x in all_cards]
     if None in seen_cards or len(set(seen_cards)) != len(seen_cards):
         raise NaverSchemaError("missing or repeated card ID")
     return all_cards
 
 
-def build_snapshot(folders, per_folder_pages):
-    """Only build a verified snapshot from complete, matched folder pages."""
+def build_snapshot(folders, per_folder_pages, *, reported_folder_count):
+    """Build only when both folder index and every card page are verified."""
     if not isinstance(folders, list) or not folders:
         raise NaverSchemaError("no wordbooks")
+    if (not isinstance(reported_folder_count, int)
+            or isinstance(reported_folder_count, bool)
+            or len(folders) != reported_folder_count):
+        raise NaverSchemaError("wordbook list is incomplete or unverified")
     if not isinstance(per_folder_pages, dict):
         raise NaverSchemaError("folder pages must be a dictionary")
     folder_ids = []
@@ -223,6 +235,7 @@ def build_snapshot(folders, per_folder_pages):
     return {
         "schema_version": "abel.naver.wordbooks.preview.v1",
         "verified_card_pages": True,
+        "verified_folder_count": reported_folder_count,
         "folder_count": len(folder_ids),
         "saved_card_count": len(cards),
         "words": classify_cards(cards),
