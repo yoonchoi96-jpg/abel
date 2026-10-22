@@ -1,6 +1,7 @@
 """Offline tests for resumable, private Naver wordbook checkpoints."""
 import json
 import sys
+from datetime import datetime, timedelta, timezone
 import tempfile
 import unittest
 from pathlib import Path
@@ -58,6 +59,7 @@ class CheckpointTests(unittest.TestCase):
         state = new_cache()
         state["entries"]["A"] = {
             "metadata": metadata(folder(changed=10)),
+            "stored_at": datetime.now(timezone.utc).isoformat(),
             "pages": pages(),
             "digest": digest(pages()),
         }
@@ -74,6 +76,7 @@ class CheckpointTests(unittest.TestCase):
         state = new_cache()
         state["entries"]["A"] = {
             "metadata": metadata(folder()),
+            "stored_at": datetime.now(timezone.utc).isoformat(),
             "pages": pages(),
             "digest": "corrupt",
         }
@@ -85,11 +88,33 @@ class CheckpointTests(unittest.TestCase):
         bad_pages = pages(ident="WRONG")
         state["entries"]["A"] = {
             "metadata": metadata(folder()),
+            "stored_at": datetime.now(timezone.utc).isoformat(),
             "pages": bad_pages,
             "digest": digest(bad_pages),
         }
         with self.assertRaises(NaverSchemaError):
             cached_pages(state, folder())
+
+    def test_cache_older_than_a_week_forces_periodic_full_check(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "state.json"
+            state = new_cache()
+            save_checkpoint(state, folder(), pages(), path, write)
+            entry = state["entries"]["A"]
+            entry["stored_at"] = (
+                datetime.now(timezone.utc) - timedelta(days=8)
+            ).isoformat()
+            self.assertIsNone(cached_pages(state, folder()))
+
+    def test_future_timestamp_never_skips_a_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "state.json"
+            state = new_cache()
+            save_checkpoint(state, folder(), pages(), path, write)
+            state["entries"]["A"]["stored_at"] = (
+                datetime.now(timezone.utc) + timedelta(days=1)
+            ).isoformat()
+            self.assertIsNone(cached_pages(state, folder()))
 
     def test_missing_pages_never_cached(self):
         with tempfile.TemporaryDirectory() as tmp:
