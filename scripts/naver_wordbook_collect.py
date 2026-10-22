@@ -74,7 +74,17 @@ def safe_response_json(response):
         raise NaverSchemaError("No application response metadata")
     status = meta.get("status")
     if status not in (0, 200, "200", "SUCCESS", "success"):
-        raise NaverSchemaError("Unexpected Naver application status (no write)")
+        # The service's private application codes are undocumented. The
+        # numeric *code* is safe to reveal; meta.message is not (it may
+        # contain account-specific text) and must never be logged.
+        if type(status) is int and -999999 <= status <= 999999:
+            code = str(status)
+        else:
+            code = "nonstandard_type_" + type(status).__name__
+        raise NaverSchemaError(
+            "Unrecognized Naver application status code: {}. "
+            "HTTP 200 alone does NOT establish application success; "
+            "no snapshot was written.".format(code))
     return data
 
 
