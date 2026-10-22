@@ -69,12 +69,12 @@ def skeleton(value: object, depth: int = 0) -> dict:
         return {"type": "string"}
     if isinstance(value, list):
         out = {"type": "array", "length": len(value)}
-        if value and depth < 3:
+        if value and depth < 5:
             out["item"] = skeleton(value[0], depth + 1)
         return out
     if isinstance(value, dict):
         out = {"type": "object", "field_count": len(value)}
-        if depth < 3:
+        if depth < 5:
             out["fields"] = {
                 clean_field(k): skeleton(v, depth + 1)
                 for k, v in list(value.items())[:24]
