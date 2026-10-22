@@ -83,6 +83,67 @@ def skeleton(value: object, depth: int = 0) -> dict:
     return {"type": "other"}
 
 
+def embedded_content_structure(value: object) -> dict:
+    """Inspect saved-card content locally while never exporting the content."""
+    if not isinstance(value, str):
+        return {"format": "not_string"}
+    import html
+    from html.parser import HTMLParser
+
+    sample = value[:20_000].strip()
+    if not sample:
+        return {"format": "empty"}
+    try:
+        parsed = json.loads(sample)
+    except (ValueError, TypeError):
+        pass
+    else:
+        if isinstance(parsed, (list, dict)):
+            return {"format": "json_string", "schema": skeleton(parsed)}
+
+    normalized = html.unescape(sample)
+    if re.search(r"<[A-Za-z][A-Za-z0-9]*(?:\\s|>|/)", normalized):
+        class Tags(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.tags: set[str] = set()
+                self.attr_names: set[str] = set()
+
+            def handle_starttag(self, tag, attrs):
+                # Never store HTML text or attribute values.
+                if re.fullmatch(r"[a-z][a-z0-9]{0,31}", tag):
+                    self.tags.add(tag)
+                for name, _ in attrs:
+                    if name and re.fullmatch(r"[a-z][a-z0-9_-]{0,31}", name):
+                        self.attr_names.add(name)
+
+        parser = Tags()
+        parser.feed(normalized)
+        return {
+            "format": "html_fragment",
+            "tags": sorted(parser.tags)[:40],
+            "attribute_names": sorted(parser.attr_names)[:40],
+        }
+
+    return {
+        "format": "plain_text",
+        "contains_hanzi": bool(re.search(r"[\\u3400-\\u9fff]", sample)),
+        "contains_hangul": bool(re.search(r"[\\uac00-\\ud7a3]", sample)),
+        "contains_latin": bool(re.search(r"[A-Za-z]", sample)),
+    }
+
+
+def content_schema_for_word_cards(payload: object) -> dict | None:
+    """Only process the first saved card and never export its values."""
+    try:
+        first = payload["data"]["m_items"][0]
+        if isinstance(first, dict):
+            return embedded_content_structure(first.get("content"))
+    except (KeyError, IndexError, TypeError):
+        pass
+    return None
+
+
 def relevance(endpoint: dict, shape: dict | None) -> int:
     hint = (endpoint["host"] + endpoint["path"]).lower()
     score = sum(2 for word in HINTS if word in hint)
@@ -104,9 +165,13 @@ class MetadataCollector:
             return
         mime = (content_type or "").split(";")[0].strip().lower()
         schema = None
+        embedded_schema = None
         if body is not None and len(body) <= MAX_BODY_BYTES and "json" in mime:
             try:
-                schema = skeleton(json.loads(body.decode("utf-8")))
+                payload = json.loads(body.decode("utf-8"))
+                schema = skeleton(payload)
+                if endpoint["path"].endswith("/mywordbook/word/list/search"):
+                    embedded_schema = content_schema_for_word_cards(payload)
             except (ValueError, UnicodeError):
                 pass
         score = relevance(endpoint, schema)
@@ -125,6 +190,7 @@ class MetadataCollector:
             "status_codes": sorted(set(prior.get("status_codes", []) + [int(status)])),
             "content_type": mime,
             "shape": schema or prior.get("shape"),
+            "card_content_structure": embedded_schema or prior.get("card_content_structure"),
             "relevance_score": max(score, prior.get("relevance_score", 0)),
             "observations": prior.get("observations", 0) + 1,
         }
