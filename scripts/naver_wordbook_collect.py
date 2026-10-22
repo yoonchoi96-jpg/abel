@@ -263,18 +263,27 @@ def run(args):
 
     dest = output_dir / "naver_wordbook_verified.json"
     # Reuse timestamp on an unchanged snapshot to avoid redundant writes.
+    existing_unchanged = False
     if dest.is_file():
         try:
             old = json.loads(dest.read_text(encoding="utf-8"))
-            if old.get("digest") == digest and old.get("verified_card_pages") is True:
-                print("No changes detected; existing verified snapshot retained")
-                return summary
-        except (OSError, ValueError):
-            raise NaverSchemaError("Existing output is corrupted; refuse overwrite")
-    changed = atomic_save_if_changed(dest, full)
+            if not isinstance(old, dict):
+                raise ValueError("Snapshot must be an object")
+            existing_unchanged = (
+                old.get("digest") == digest
+                and old.get("verified_card_pages") is True)
+            if existing_unchanged:
+                # Preserve the original verification timestamp on unchanged data.
+                full = old
+                summary["verified_at"] = old["verified_at"]
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            raise NaverSchemaError(
+                "Existing output is corrupted; refuse overwrite") from exc
+    changed = False if existing_unchanged else atomic_save_if_changed(dest, full)
     atomic_save_if_changed(output_dir / "naver_wordbook_status.json", summary)
     if drive_dir:
-        # Only user-selected, already mounted local Drive folder is written.
+        # An existing local snapshot can still be published on an unchanged run.
+        # Never upload browser profiles, cookies or the raw HTTP responses.
         atomic_save_if_changed(drive_dir / dest.name, full)
         atomic_save_if_changed(drive_dir / "naver_wordbook_status.json", summary)
     print("Verified snapshot: {} (changed={})".format(dest, changed))
@@ -296,6 +305,8 @@ def main():
         cli.error("--publish-to-drive requires --drive-dir")
     if args.timeout < 10 or args.pause < 0.7:
         cli.error("Use timeout >= 10s and pause >= 0.7s to avoid excessive traffic")
+    if args.profile_dir.expanduser().resolve() == args.output_dir.expanduser().resolve():
+        cli.error("Browser profile cannot be the snapshot output directory")
     try:
         run(args)
     except (NaverSchemaError, TimeoutError) as exc:
