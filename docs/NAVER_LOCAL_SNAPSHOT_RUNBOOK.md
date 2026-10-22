@@ -139,3 +139,34 @@ If no attempt file appears, the command did not reach collector.main()
 (e.g., unit tests blocked the original && chain, git pull failed, Python
 environment missing, import error or wrong checkout). Share the terminal
 error text, but NEVER share Naver cookies, login tokens or browser profiles.
+
+
+## Verified local diagnostic: meta.status=1 on the folder endpoint
+
+On 2026-10-23 KST the owner ran the browser collector and observed:
+
+    READING_FOLDER_INDEX
+    INCOMPLETE: Unrecognized Naver application status code: 1
+
+The request was HTTP 200. Earlier, the safe schema-only UI probe showed
+that this folder endpoint returns a pagination envelope with fields
+m_items, m_total, m_page and m_totalPage.
+
+The collector has been updated to conditionally accept integer
+meta.status=1 ONLY when that response also has a structurally valid
+folder- or card-page envelope. It still rejects other unexpected codes,
+error-shaped status=1 payloads, missing fields and incomplete pagination.
+This is grounded in the user's observed UI response, not an official
+documented Naver success-code contract.
+
+On the Mac, update the branch and run:
+
+    cd ~/Downloads/abel-naver-probe
+    git pull origin feat/naver-readonly-network-probe-20261023
+    source .venv/bin/activate
+    python -m unittest discover -s tests -p 'test_naver_wordbook_*.py' -v
+    python -u scripts/naver_wordbook_collect.py
+
+If the collector fails again, share ONLY the sanitized
+naver_wordbook_attempt.json or the terminal error text, not profile,
+cookies, private saved word contents or request URLs.
