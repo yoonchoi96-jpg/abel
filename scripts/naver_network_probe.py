@@ -147,6 +147,46 @@ class MetadataCollector:
         }
 
 
+def has_word_cards(collector: MetadataCollector) -> bool:
+    return any(
+        event["path"].endswith("/mywordbook/word/list/search")
+        for event in collector.events.values()
+    )
+
+
+def try_open_wordbook(page, collector: MetadataCollector) -> bool:
+    """Navigate one *visible* saved-wordbook link; no account mutation."""
+    selectors = [
+        "#main_folder a[data-id]",
+        "a[href*='wbId=']",
+        "a[href*='#/my/cards']",
+        "[data-wb-id]",
+        "[data-wordbook-id]",
+    ]
+    for selector in selectors:
+        try:
+            loc = page.locator(selector)
+            for index in range(min(loc.count(), 30)):
+                item = loc.nth(index)
+                if not item.is_visible():
+                    continue
+                item.click(timeout=2500)
+                page.wait_for_timeout(1500)
+                if has_word_cards(collector):
+                    return True
+        except Exception:
+            continue
+
+    try:
+        item = page.get_by_text("내가 찾은 단어", exact=True).first
+        if item.is_visible():
+            item.click(timeout=2500)
+            page.wait_for_timeout(1500)
+    except Exception:
+        pass
+    return has_word_cards(collector)
+
+
 def run_probe(duration: int, output: Path) -> None:
     try:
         from playwright.sync_api import sync_playwright
@@ -193,9 +233,16 @@ def run_probe(duration: int, output: Path) -> None:
             print("로그인이 필요하면 열린 브라우저에서 직접 로그인하세요.")
             input("로그인 후, 단어장 첫 화면이 보이면 터미널에서 Enter: ")
             page.goto(MAIN_URL, wait_until="domcontentloaded", timeout=60_000)
-            print("이제 브라우저에서 서로 다른 단어장 폴더 2~3개와 다음 페이지를 직접 클릭하세요.")
-            print("단어를 추가/삭제할 필요는 없습니다. {}초 동안 요청 메타데이터만 관찰합니다.".format(duration))
+            page.wait_for_timeout(1700)
+            if not has_word_cards(collector):
+                if try_open_wordbook(page, collector):
+                    print("단어장 폴더를 자동으로 열었고 단어 목록 응답을 감지했습니다.")
+                else:
+                    print("단어 목록 자동 열기 실패: 지금 열린 Chromium 창에서 '내가 찾은 단어'나 다른 단어장 폴더를 클릭하세요.")
+            print("추가·삭제 없이 단어장 폴더를 탐색할 수 있습니다. 관찰 시간: {}초".format(duration))
             page.wait_for_timeout(duration * 1000)
+            if not has_word_cards(collector):
+                print("경고: word/list/search가 감지되지 않았습니다. JSON은 부분 진단본입니다.")
         finally:
             # Nothing is sent over the network except the user's normal Naver UI requests.
             report = collector.report()
