@@ -57,6 +57,72 @@ class CollectorTests(unittest.TestCase):
         with self.assertRaises(NaverSchemaError):
             require_page(payload, collection="cards", expected_page=1)
 
+    def test_status_one_with_valid_folder_page_is_accepted(self):
+        response = DummyResponse({
+            "meta": {"status": 1, "message": "Do not print actual message"},
+            "data": {
+                "m_total": 2, "m_page": 1, "m_totalPage": 1,
+                "m_items": [{"id": "folderA"}, {"id": "folderB"}],
+            },
+        })
+        payload = safe_response_json(response)
+        items, total, number, pages = require_page(
+            payload, collection="folders", expected_page=1)
+        self.assertEqual((len(items), total, number, pages), (2, 2, 1, 1))
+
+    def test_status_one_with_valid_card_page_is_accepted(self):
+        response = DummyResponse({
+            "meta": {"status": 1},
+            "data": {
+                "m_total": 1, "m_current_page": 1, "m_total_pages": 1,
+                "m_items": [{"id": "card1", "wordbookId": "folderA"}],
+            },
+        })
+        payload = safe_response_json(response)
+        self.assertEqual(require_page(
+            payload, collection="cards", expected_page=1)[1], 1)
+
+    def test_status_one_with_error_body_is_still_rejected(self):
+        response = DummyResponse({
+            "meta": {"status": 1, "message": "temporary failure"},
+            "data": {"error": "No user wordbook data"},
+        })
+        with self.assertRaises(NaverSchemaError):
+            safe_response_json(response)
+
+    def test_status_one_with_invalid_pagination_is_rejected(self):
+        for invalid in (
+            {"m_items": [], "m_total": "2", "m_page": 1, "m_totalPage": 1},
+            {"m_items": [], "m_total": 2, "m_page": 1, "m_totalPage": "1"},
+            {"m_items": "private", "m_total": 2, "m_page": 1, "m_totalPage": 1},
+        ):
+            with self.subTest(data=invalid):
+                with self.assertRaises(NaverSchemaError):
+                    safe_response_json(DummyResponse({
+                        "meta": {"status": 1}, "data": invalid}))
+
+    def test_other_application_code_not_allowed_even_with_valid_page(self):
+        response = DummyResponse({
+            "meta": {"status": 2},
+            "data": {
+                "m_total": 1, "m_page": 1, "m_totalPage": 1,
+                "m_items": [{"id": "folderA"}],
+            },
+        })
+        with self.assertRaises(NaverSchemaError):
+            safe_response_json(response)
+
+    def test_boolean_status_not_mistaken_for_one(self):
+        response = DummyResponse({
+            "meta": {"status": True},
+            "data": {
+                "m_total": 1, "m_page": 1, "m_totalPage": 1,
+                "m_items": [{"id": "folderA"}],
+            },
+        })
+        with self.assertRaises(NaverSchemaError):
+            safe_response_json(response)
+
     def test_rejects_application_error_despite_http_200(self):
         with self.assertRaises(NaverSchemaError):
             safe_response_json(DummyResponse({
