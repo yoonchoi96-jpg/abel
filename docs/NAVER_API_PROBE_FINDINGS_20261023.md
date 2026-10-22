@@ -54,3 +54,63 @@ probe, not the production sync architecture.
 To get card field types, update this branch then run the local probe again.
 No passwords, cookies, folder ID values, words or meanings belong in the
 diagnostic report.
+
+
+## Third diagnostic: 03:38:28 KST — saved-card schema recovered
+
+Source: owner-uploaded naver_api_probe_FINAL.json, captured at
+2026-10-22T18:38:28.826656Z; 9 candidate groups; no dropped groups.
+The word/list/search GET endpoint returned HTTP 200 and was observed 7
+times. One observed response contained 20 card records.
+
+Its sampled data.m_items[0] record has exactly the following 14 fields:
+
+    id: string
+    entryId: string
+    wordbookId: string
+    service: string
+    dicType: string
+    name: string
+    contentType: number
+    saveType: string
+    sourceType: string
+    content: string
+    memo: null
+    quizStatus: null
+    createDate: number
+    read: bool
+
+Implications: wordbookId supplies the collection membership key; id and
+entryId are distinct IDs; name is a plausible headword; content holds
+string data whose internal encoding and mapping to pinyin/Korean gloss
+are NOT established by this report. Name must not be assumed Chinese
+without local-value/schema validation. No user words were exported.
+
+The related folder endpoint wordbook/list.dict had 19 items in a sampled
+response and included ID, name, wordCount, updateTimestamp. These counts
+represent samples, not a full-coverage audit.
+
+### New, metadata-only embedded-content diagnostic
+
+The experimental probe now exposes a field named card_content_structure
+ONLY for the word/list/search response. For the first card, it emits:
+- json_string: structural JSON field names and value types, never values;
+- html_fragment: HTML tag names and attribute names, never text/attribute values;
+- plain_text: language-presence booleans, never the text itself;
+- or empty/not_string.
+
+This is only a format classifier, not a live sync or guaranteed data
+parser. It does not replay endpoints, export cookies, headers, saved words,
+meanings, folder names or IDs. Verification of word/pinyin/meaning mapping,
+full pagination, duplicate preservation, service access requirements, and
+partial-failure safety remains before any production activation.
+
+For another diagnostic on the Mac:
+
+    cd ~/Downloads/abel-naver-probe
+    git pull origin feat/naver-readonly-network-probe-20261023
+    source .venv/bin/activate
+    python scripts/naver_network_probe.py --duration 60 --output ~/Desktop/naver_api_probe_CONTENT.json
+
+The first wordbook is opened through UI navigation after the owner logs in.
+Only share the sanitized JSON output, not any browser profile or HAR export.
