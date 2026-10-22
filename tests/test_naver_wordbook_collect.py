@@ -26,6 +26,105 @@ class DummyResponse:
 
 
 class CollectorTests(unittest.TestCase):
+    def test_visits_distinct_folders_after_all_pages_and_reports_progress(self):
+        from types import SimpleNamespace
+        from urllib.parse import urlsplit, parse_qs
+
+        class Pending:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        class FakePage:
+            def __init__(self):
+                self.visits = []
+                self.pending = None
+                self.predicate = None
+
+            def expect_response(self, predicate, timeout):
+                self.pending = Pending()
+                self.predicate = predicate
+                return self.pending
+
+            def goto(self, url, **kwargs):
+                query = parse_qs(urlsplit(url).fragment.split("?", 1)[1])
+                folder_id = query["wbId"][0]
+                page = int(query["page"][0])
+                self.visits.append((folder_id, page))
+                all_cards = [
+                    {"id": "{}_{}".format(folder_id, i), "wordbookId": folder_id}
+                    for i in range(3 if folder_id == "A" else 1)
+                ]
+                page_count = 2 if folder_id == "A" else 1
+                page_items = all_cards[(page - 1) * 2:page * 2]
+                response = DummyResponse({
+                    "meta": {"status": 1},
+                    "data": {"m_total": len(all_cards), "m_total_pages": page_count,
+                             "m_current_page": page, "m_items": page_items},
+                })
+                response.url = (
+                    "https://learn.dict.naver.com/gateway-api/zhkodict/"
+                    "mywordbook/word/list/search?wbId=" + folder_id
+                )
+                response.request = SimpleNamespace(method="GET")
+                self.pending.value = response
+                self_test.assertTrue(self.predicate(response))
+
+        self_test = self
+        page = FakePage()
+        progress = []
+        with patch.object(collector.time, "sleep"):
+            a = collector.load_cards_for_folder(
+                page, {"id": "A", "name": "Folder A", "wordCount": 3},
+                timeout_ms=1000, pause_s=0.7,
+                page_progress=lambda **kwargs: progress.append(kwargs))
+            b = collector.load_cards_for_folder(
+                page, {"id": "B", "name": "Folder B", "wordCount": 1},
+                timeout_ms=1000, pause_s=0.7,
+                page_progress=lambda **kwargs: progress.append(kwargs))
+        self.assertEqual(page.visits, [("A", 1), ("A", 2), ("B", 1)])
+        self.assertEqual([p["page_index"] for p in progress], [1, 2, 1])
+        self.assertEqual([p["page_count"] for p in progress], [2, 2, 1])
+        self.assertEqual([p["cards_read"] for p in progress], [2, 3, 1])
+        self.assertEqual([len(r["data"]["m_items"]) for r in a], [2, 1])
+        self.assertEqual([len(r["data"]["m_items"]) for r in b], [1])
+
+    def test_progress_is_not_emitted_for_mismatched_folder_cards(self):
+        from types import SimpleNamespace
+        from urllib.parse import urlsplit, parse_qs
+
+        class StubPage:
+            def expect_response(self, predicate, timeout):
+                class Expected:
+                    def __enter__(self_inner):
+                        return self_inner
+                    def __exit__(self_inner, *exc):
+                        return False
+                self.current = Expected()
+                return self.current
+            def goto(self, url, **kwargs):
+                r = DummyResponse({
+                    "meta": {"status": 1},
+                    "data": {"m_total": 1, "m_current_page": 1,
+                             "m_total_pages": 1, "m_items": [
+                                 {"id": "X", "wordbookId": "WRONG_FOLDER"}
+                             ]},
+                })
+                r.url = ("https://learn.dict.naver.com/gateway-api/"
+                         "zhkodict/mywordbook/word/list/search?wbId=A")
+                r.request = SimpleNamespace(method="GET")
+                self.current.value = r
+
+        progress = []
+        with self.assertRaises(NaverSchemaError):
+            collector.load_cards_for_folder(
+                StubPage(), {"id": "A", "name": "A", "wordCount": 1},
+                timeout_ms=1000, pause_s=0.7,
+                page_progress=lambda **x: progress.append(x))
+        self.assertFalse(progress)
+
     def test_card_route_escapes_folder_and_preserves_page(self):
         route = cards_url({"id": "abc123", "name": "대만 旅行"}, 2)
         self.assertIn("wbId=abc123", route)
