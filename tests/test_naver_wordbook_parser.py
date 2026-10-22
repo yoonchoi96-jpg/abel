@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from naver_wordbook_parser import (
     NaverSchemaError, normalize_card, classify_cards,
-    validate_folder_pages, build_snapshot,
+    classify_cards_with_unresolved, validate_folder_pages, build_snapshot,
 )
 
 
@@ -67,6 +67,31 @@ class ParserTests(unittest.TestCase):
         card["content"] = "not json"
         with self.assertRaises(NaverSchemaError):
             normalize_card(card)
+
+    def test_unknown_content_is_quarantined_not_silently_dropped(self):
+        supported = fake_card("维护", "A", 1)
+        unknown = fake_card("未知", "A", 2)
+        unknown["content"] = '{"other_kind": {"id": 7}}'
+        known, unresolved = classify_cards_with_unresolved([supported, unknown])
+        self.assertEqual([x["word"] for x in known], ["维护"])
+        self.assertEqual(len(unresolved), 1)
+        self.assertEqual(unresolved[0]["card_id"], unknown["id"])
+        self.assertEqual(unresolved[0]["reason"], "unsupported_content_structure")
+        self.assertNotIn("other_kind", json.dumps(unresolved))
+
+    def test_raw_card_coverage_verified_even_with_unknown_content(self):
+        valid = fake_card("维护", "A", 1)
+        unknown = fake_card("未知", "A", 2)
+        unknown["content"] = '{"other_kind": {"id": 7}}'
+        folders = [{"id": "A", "name": "local", "wordCount": 2}]
+        response = {"data": {"m_total": 2, "m_total_pages": 1,
+                             "m_current_page": 1, "m_items": [valid, unknown]}}
+        snap = build_snapshot(folders, {"A": [response]}, reported_folder_count=1)
+        self.assertEqual(snap["saved_card_count"], 2)
+        self.assertEqual(len(snap["words"]), 1)
+        self.assertEqual(snap["unresolved_card_count"], 1)
+        self.assertFalse(snap["classification_complete"])
+        self.assertTrue(snap["priority_counts_provisional"])
 
     def test_one_based_complete_page(self):
         cards = [fake_card("潜力", "folderA", 1), fake_card("损失", "folderA", 2)]
