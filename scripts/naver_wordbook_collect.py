@@ -194,12 +194,14 @@ def load_folders(page, timeout_ms):
     return folders, total
 
 
-def load_cards_for_folder(page, folder, *, timeout_ms, pause_s):
+def load_cards_for_folder(page, folder, *, timeout_ms, pause_s,
+                          page_progress=lambda **details: None):
     folder_id = folder["id"]
     responses = []
     expected_total = None
     expected_count = None
     page_number = 1
+    accumulated_cards = 0
     while True:
         if len(responses) >= MAX_PAGES_PER_FOLDER:
             raise NaverSchemaError("Too many pages; safety stop")
@@ -215,15 +217,21 @@ def load_cards_for_folder(page, folder, *, timeout_ms, pause_s):
         if expected_total is None:
             expected_total = total
             expected_count = count
+            if count > MAX_PAGES_PER_FOLDER:
+                raise NaverSchemaError("Folder exceeds the page safety cap")
         if (total != expected_total or count != expected_count
                 or total != folder["wordCount"]):
             raise NaverSchemaError("Word counts changed or disagree across pages")
         for item in items:
             if item.get("wordbookId") != folder_id:
                 raise NaverSchemaError("Wordbook ID mismatch; aborting snapshot")
+        accumulated_cards += len(items)
+        if accumulated_cards > expected_total or accumulated_cards > MAX_CARDS:
+            raise NaverSchemaError("Card count exceeds declared/safety total")
         responses.append(response)
-        if sum(len(r["data"]["m_items"]) for r in responses) > MAX_CARDS:
-            raise NaverSchemaError("Card safety cap exceeded")
+        # Nothing private: report the numeric position/volume only.
+        page_progress(page_index=page_number, page_count=max(1, count),
+                      cards_read=accumulated_cards, cards_expected=total)
         if page_number >= max(1, count):
             break
         page_number += 1
@@ -300,11 +308,23 @@ def run(args, progress=lambda stage, **details: None):
                 progress("READING_FOLDER_CARDS", folder_index=n,
                          folder_count=total, completed_folders=n - 1)
                 print("Reading folder {}/{} ...".format(n, total))
+                def page_progress(*, page_index, page_count,
+                                  cards_read, cards_expected):
+                    progress("READING_CARD_PAGE", folder_index=n,
+                             folder_count=total, completed_folders=n - 1,
+                             page_index=page_index, page_count=page_count,
+                             cards_read=cards_read, cards_expected=cards_expected)
+                    print("  Folder {}/{} | page {}/{} | cards {}/{}".format(
+                        n, total, page_index, page_count, cards_read,
+                        cards_expected), flush=True)
+
                 per_folder[folder["id"]] = load_cards_for_folder(
                     page, folder, timeout_ms=args.timeout * 1000,
-                    pause_s=args.pause)
+                    pause_s=args.pause, page_progress=page_progress)
                 progress("FOLDER_COMPLETE", folder_index=n,
-                         folder_count=total, completed_folders=n)
+                         folder_count=total, completed_folders=n,
+                         page_index=0, page_count=0,
+                         cards_read=0, cards_expected=0)
                 time.sleep(args.pause)
             progress("VERIFYING_ALL_PAGES", completed_folders=total)
             snapshot = build_snapshot(
@@ -393,7 +413,8 @@ def main():
         "started_at": now_iso(),
         "stage": "STARTING", "complete": False,
         "folder_count": None, "folder_index": 0,
-        "completed_folders": 0,
+        "completed_folders": 0, "page_index": 0, "page_count": 0,
+        "cards_read": 0, "cards_expected": 0,
     }
 
     def progress(stage, **details):
@@ -409,6 +430,12 @@ def main():
     progress("STARTING")
     try:
         run(args, progress=progress)
+    except KeyboardInterrupt:
+        failed_stage = attempt["stage"]
+        progress("CANCELLED", error_stage=failed_stage,
+                 error_category="UserCancelled",
+                 error_message="Stopped by owner before verification")
+        raise SystemExit("CANCELLED: no verified snapshot was written.") from None
     except NaverSchemaError as exc:
         failed_stage = attempt["stage"]
         progress("INCOMPLETE", error_stage=failed_stage,
