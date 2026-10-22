@@ -89,7 +89,7 @@ class OfflineFinalizeTests(unittest.TestCase):
             path = root / "checkpoint.json"
             state = new_cache()
             add_folder(state, "F00", [fake_card(0, "F00")], path)
-            attempt_file(root / "naver_wordbook_attempt.json", 2, 2)
+            attempt_file(root / "naver_wordbook_attempt.json", completed=2, total=2)
             with self.assertRaises(NaverSchemaError):
                 finalize(checkpoint_path=path, output_dir=root)
             self.assertFalse((root / "naver_wordbook_verified.json").exists())
@@ -113,7 +113,7 @@ class OfflineFinalizeTests(unittest.TestCase):
             path = root / "checkpoint.json"
             state = new_cache()
             add_folder(state, "F00", [fake_card(0, "F00")], path)
-            attempt_file(root / "naver_wordbook_attempt.json", 1, 1)
+            attempt_file(root / "naver_wordbook_attempt.json", completed=1, total=1)
             first = finalize(checkpoint_path=path, output_dir=root)
             second = finalize(checkpoint_path=path, output_dir=root)
             self.assertEqual(first["sha256"], second["sha256"])
