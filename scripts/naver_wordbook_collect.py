@@ -312,8 +312,13 @@ def main():
         cli.error("Browser profile cannot be the snapshot output directory")
     try:
         run(args)
-    except (NaverSchemaError, TimeoutError) as exc:
-        raise SystemExit("INCOMPLETE: existing verified files unchanged. " + str(exc)) from exc
+    except NaverSchemaError as exc:
+        raise SystemExit("INCOMPLETE: no new verified snapshot. " + str(exc)) from None
+    except Exception as exc:
+        # Browser errors may contain private query values. Never print raw error text.
+        raise SystemExit(
+            "INCOMPLETE: no new verified snapshot. Browser/IO error type: "
+            + type(exc).__name__) from None
 
 
 if __name__ == "__main__":
