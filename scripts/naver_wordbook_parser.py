@@ -161,6 +161,40 @@ def classify_cards(cards):
     return sorted(result, key=lambda x: (x["priority"], x["word"]))
 
 
+def classify_cards_with_unresolved(cards):
+    """Classify valid cards and quarantine unrecognized formats.
+
+    An unknown content shape MUST NOT delete a saved card or invent a
+    Chinese headword, meaning, or duplicate membership. Keep the complete
+    original card safely in the local checkpoint for later recovery.
+    """
+    if not isinstance(cards, list):
+        raise NaverSchemaError("cards must be a list")
+    parseable = []
+    unresolved = []
+    for card in cards:
+        if not isinstance(card, dict):
+            raise NaverSchemaError("card must be an object")
+        # Outer IDs were validated by the complete page collector. They
+        # remain the durable reference to an unparseable saved entry.
+        if not isinstance(card.get("id"), str) or not card["id"]:
+            raise NaverSchemaError("card identity missing")
+        if not isinstance(card.get("wordbookId"), str) or not card["wordbookId"]:
+            raise NaverSchemaError("card folder identity missing")
+        try:
+            normalize_card(card)
+            parseable.append(card)
+        except NaverSchemaError:
+            unresolved.append({
+                "card_id": card["id"],
+                "wordbook_id": card["wordbookId"],
+                "reason": "unsupported_content_structure",
+            })
+    # Keep existing strict normalizer as the only source of meanings/pinyin.
+    classified = classify_cards(parseable)
+    return classified, unresolved
+
+
 def validate_folder_pages(folder_id, pages, expected_total):
     """Require all pages, no duplicate cards, and matching reported count."""
     if not isinstance(pages, list) or not pages:
@@ -232,11 +266,16 @@ def build_snapshot(folders, per_folder_pages, *, reported_folder_count):
             folder_id, per_folder_pages.get(folder_id), folder.get("wordCount")))
     if set(per_folder_pages) != set(folder_ids):
         raise NaverSchemaError("unexpected/incomplete folder keys")
+    words, unresolved = classify_cards_with_unresolved(cards)
     return {
-        "schema_version": "abel.naver.wordbooks.preview.v1",
+        "schema_version": "abel.naver.wordbooks.preview.v2",
         "verified_card_pages": True,
         "verified_folder_count": reported_folder_count,
         "folder_count": len(folder_ids),
         "saved_card_count": len(cards),
-        "words": classify_cards(cards),
+        "words": words,
+        "unresolved_cards": unresolved,
+        "unresolved_card_count": len(unresolved),
+        "classification_complete": not bool(unresolved),
+        "priority_counts_provisional": bool(unresolved),
     }
