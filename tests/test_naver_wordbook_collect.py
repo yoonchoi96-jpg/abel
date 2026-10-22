@@ -6,6 +6,8 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+import naver_wordbook_collect as collector
+from unittest.mock import patch
 from naver_wordbook_collect import (
     atomic_save_if_changed, cards_url, fingerprint, require_page,
     safe_response_json,
@@ -75,6 +77,27 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual(
             fingerprint({"word": "维持", "n": 2}),
             fingerprint({"n": 2, "word": "维持"}))
+
+    def test_incomplete_run_writes_anonymized_attempt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            def fail(_args, progress):
+                progress("READING_FOLDER_CARDS", folder_count=19,
+                         folder_index=3, completed_folders=2)
+                raise NaverSchemaError("Word counts changed or disagree across pages")
+
+            with patch.object(collector, "run", side_effect=fail), patch.object(
+                sys, "argv", ["collect", "--output-dir", tmp]
+            ):
+                with self.assertRaises(SystemExit):
+                    collector.main()
+            path = Path(tmp) / "naver_wordbook_attempt.json"
+            self.assertTrue(path.is_file())
+            attempt = json.loads(path.read_text())
+            self.assertEqual(attempt["stage"], "INCOMPLETE")
+            self.assertEqual(attempt["error_stage"], "READING_FOLDER_CARDS")
+            self.assertEqual(attempt["completed_folders"], 2)
+            self.assertEqual(attempt["folder_count"], 19)
+            self.assertFalse((Path(tmp) / "naver_wordbook_verified.json").exists())
 
     def test_snapshot_file_writes_only_when_changed(self):
         with tempfile.TemporaryDirectory() as tmp:
