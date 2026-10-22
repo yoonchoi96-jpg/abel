@@ -114,3 +114,47 @@ For another diagnostic on the Mac:
 
 The first wordbook is opened through UI navigation after the owner logs in.
 Only share the sanitized JSON output, not any browser profile or HAR export.
+
+
+## Fourth diagnostic: 03:46:19 KST — embedded content mapping confirmed
+
+Owner supplied naver_api_probe_CONTENT.json captured at
+2026-10-22T18:46:19.510489Z. The browser observed 8 HTTP-200 GET events
+to word/list/search and the first card's content field is a JSON-encoded
+string containing an entry object.
+
+Observed first-card nested shape:
+- entry.members[]: member_id, entry_name, super_script, entry_importance,
+  origin_language, kanji, prons[]
+- entry.means[]: mean_id, part_name, show_mean, mean_type, mean_seq,
+  language, examples[]
+- entry.mix_pron and entry.korean_mix_pron are strings, but their values
+  and exact semantics are still unverified.
+- wordbookId comes from the outer card, and joins to folder.id.
+
+This is adequate to implement an OFFLINE, FAIL-CLOSED candidate parser,
+but not adequate to label mix_pron as pinyin. Individual fields within
+prons[] were not surfaced because diagnostic depth stopped at the
+pronunciation object. No actual words were exported in this report.
+
+New scripts/naver_wordbook_parser.py:
+- Decodes card.content as JSON and extracts entry_name, show_mean,
+  part_name and original wordbookId/cardId.
+- Preserves mix_pron as unverified raw pronunciation (not silently pinyin).
+- Extracts pinyin only when an explicitly named pronunciation key exists.
+- Preserves repeated word memberships across DISTINCT folder IDs for
+  P1 (4+), P2 (3), P3 (2), P4 (1). Repeated cards inside a folder count
+  once.
+- Rejects missing/noncontiguous pages, mismatched totals, duplicate IDs,
+  missing folders, mismatched folder keys and malformed nested JSON.
+- The parser has NO network, Naver authentication or UI automation.
+
+The parser and synthetic test suite were uploaded to the draft branch
+and verified via GitHub readback. No actual Naver data was retrieved with
+the parser and its tests have NOT been executed locally/CI in this step.
+
+NEXT: implement and independently verify an OWNER-LOCAL read-only
+collection stage that supplies complete folder and paginated card values
+to this parser. This is NOT yet real-time sync, and this code does not
+alter production Abel data or schedule polling. No more schema-metadata
+uploads are required for these known fields.
