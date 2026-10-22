@@ -162,20 +162,25 @@ def finalize(
     snapshot, collection_started = snapshot_from_local_checkpoint(
         checkpoint_path, attempt_path, current_folders=current_folders)
     content_digest = fingerprint(snapshot)
+    live_index_verified = current_folders is not None
     full = dict(snapshot, source="naver_owner_local_checkpoint",
                 verified_at=datetime.now(timezone.utc).isoformat(),
                 origin_collection_started_at=collection_started,
-                not_live_freshness_check=True, digest=content_digest)
+                live_folder_index_verified=live_index_verified,
+                not_live_freshness_check=not live_index_verified,
+                digest=content_digest)
     priorities = {
         key: sum(w["priority"] == key for w in snapshot["words"])
         for key in ("P1", "P2", "P3", "P4")
     }
     summary = {
         "format": "abel.naver.sync_status.v2",
-        "source": "owner_local_checkpoint_offline",
+        "source": ("owner_local_checkpoint_reconciled"
+                   if live_index_verified else "owner_local_checkpoint_offline"),
         "verified_at": full["verified_at"],
         "origin_collection_started_at": collection_started,
-        "not_live_freshness_check": True,
+        "live_folder_index_verified": live_index_verified,
+        "not_live_freshness_check": not live_index_verified,
         "collection_complete": True,
         "classification_complete": snapshot["classification_complete"],
         "complete": snapshot["classification_complete"],
