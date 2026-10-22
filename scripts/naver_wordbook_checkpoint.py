@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from naver_wordbook_parser import NaverSchemaError, validate_folder_pages
 
 SCHEMA = "abel.naver.local_checkpoint.v1"
+CACHE_MAX_AGE = timedelta(days=7)
 FRESHNESS_FIELDS = (
     "id", "name", "wordCount", "updateTimestamp", "lastWordTimestamp",
     "lastReciteTimestamp", "lastLearnTimestamp",
@@ -65,13 +67,20 @@ def load_cache(path):
     return raw
 
 
-def cached_pages(cache, folder):
-    """Return validated pages if and only if all change markers are stable."""
+def cached_pages(cache, folder, *, now=None):
+    """Reuse only stable, complete pages from the past seven days."""
+    now = now or datetime.now(timezone.utc)
     meta = metadata(folder)
     if not can_reuse_metadata(meta):
         return None
     entry = cache["entries"].get(meta["id"])
     if not isinstance(entry, dict) or entry.get("metadata") != meta:
+        return None
+    try:
+        stored = datetime.fromisoformat(entry["stored_at"])
+        if stored.tzinfo is None or stored > now or now - stored > CACHE_MAX_AGE:
+            return None
+    except (ValueError, TypeError, KeyError):
         return None
     pages = entry.get("pages")
     if not isinstance(pages, list) or entry.get("digest") != digest(pages):
@@ -86,7 +95,9 @@ def save_checkpoint(cache, folder, pages, destination, atomic_save):
     meta = metadata(folder)
     validate_folder_pages(meta["id"], pages, meta["wordCount"])
     cache["entries"][meta["id"]] = {
-        "metadata": meta, "digest": digest(pages), "pages": pages,
+        "metadata": meta,
+        "stored_at": datetime.now(timezone.utc).isoformat(),
+        "digest": digest(pages), "pages": pages,
     }
     atomic_save(destination, cache)
 
