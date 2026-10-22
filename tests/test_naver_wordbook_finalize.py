@@ -6,7 +6,9 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from naver_wordbook_finalize import finalize, snapshot_from_local_checkpoint
+from naver_wordbook_finalize import (
+    finalize, snapshot_from_local_checkpoint, select_checkpoint_folders,
+)
 from naver_wordbook_checkpoint import new_cache, save_checkpoint
 from naver_wordbook_parser import NaverSchemaError
 
@@ -82,6 +84,69 @@ class OfflineFinalizeTests(unittest.TestCase):
             self.assertEqual(
                 json.loads(path.read_text())["entries"]["F07"]["pages"][0]
                 ["data"]["m_items"][0]["content"], '{"unexpected": 1}')
+
+    def test_stale_extra_folder_requires_and_accepts_exact_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "checkpoint.json"
+            state = new_cache()
+            add_folder(state, "A", [fake_card(1, "A")], path)
+            add_folder(state, "B", [fake_card(2, "B")], path)
+            add_folder(state, "STALE", [fake_card(3, "STALE")], path)
+            attempt_file(root / "naver_wordbook_attempt.json",
+                         completed=2, total=2)
+
+            with self.assertRaisesRegex(NaverSchemaError, "Checkpoint has 3"):
+                finalize(checkpoint_path=path, output_dir=root)
+
+            live = [state["entries"][ident]["metadata"] for ident in ("A", "B")]
+            stats = finalize(checkpoint_path=path, output_dir=root,
+                             current_folders=live)
+            self.assertEqual(stats["folder_count"], 2)
+            self.assertEqual(stats["saved_card_count"], 2)
+            self.assertEqual(stats["unresolved_card_count"], 0)
+            self.assertIn("STALE", state["entries"])
+            self.assertEqual(len(state["entries"]), 3)
+
+    def test_index_reconciliation_rejects_wrong_or_changed_folder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "checkpoint.json"
+            state = new_cache()
+            add_folder(state, "A", [fake_card(1, "A")], path)
+            add_folder(state, "B", [fake_card(2, "B")], path)
+            matching = [state["entries"]["A"]["metadata"],
+                        state["entries"]["B"]["metadata"]]
+            with self.assertRaises(NaverSchemaError):
+                select_checkpoint_folders(state["entries"], 2, [
+                    matching[0], {"id": "UNKNOWN", "name": "other"}])
+            changed = dict(matching[0], wordCount=2)
+            with self.assertRaisesRegex(NaverSchemaError, "changed"):
+                select_checkpoint_folders(state["entries"], 2,
+                                          [changed, matching[1]])
+            with self.assertRaisesRegex(NaverSchemaError, "Duplicate"):
+                select_checkpoint_folders(state["entries"], 2,
+                                          [matching[0], matching[0]])
+            self.assertEqual(len(select_checkpoint_folders(
+                state["entries"], 2, matching)), 2)
+
+    def test_reconciled_index_requires_all_nineteen_actual_entries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "checkpoint.json"
+            state = new_cache()
+            for n in range(19):
+                add_folder(state, "F{:02d}".format(n),
+                           [fake_card(n, "F{:02d}".format(n))], path)
+            add_folder(state, "OLD", [fake_card(99, "OLD")], path)
+            attempt_file(root / "naver_wordbook_attempt.json",
+                         completed=19, total=19)
+            matching = [state["entries"]["F{:02d}".format(n)]["metadata"]
+                        for n in range(19)]
+            result = finalize(checkpoint_path=path, output_dir=root,
+                              current_folders=matching)
+            self.assertEqual(result["folder_count"], 19)
+            self.assertEqual(result["saved_card_count"], 19)
+            self.assertTrue(result["classification_complete"])
 
     def test_refuses_missing_checkpoint_folder(self):
         with tempfile.TemporaryDirectory() as tmp:
