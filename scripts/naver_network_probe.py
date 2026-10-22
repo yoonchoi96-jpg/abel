@@ -102,7 +102,7 @@ def embedded_content_structure(value: object) -> dict:
             return {"format": "json_string", "schema": skeleton(parsed)}
 
     normalized = html.unescape(sample)
-    if re.search(r"<[A-Za-z][A-Za-z0-9]*(?:\\s|>|/)", normalized):
+    if re.search(r"<[A-Za-z][A-Za-z0-9]*(?:\s|>|/)", normalized):
         class Tags(HTMLParser):
             def __init__(self):
                 super().__init__()
@@ -127,8 +127,8 @@ def embedded_content_structure(value: object) -> dict:
 
     return {
         "format": "plain_text",
-        "contains_hanzi": bool(re.search(r"[\\u3400-\\u9fff]", sample)),
-        "contains_hangul": bool(re.search(r"[\\uac00-\\ud7a3]", sample)),
+        "contains_hanzi": bool(re.search(r"[\u3400-\u9fff]", sample)),
+        "contains_hangul": bool(re.search(r"[\uac00-\ud7a3]", sample)),
         "contains_latin": bool(re.search(r"[A-Za-z]", sample)),
     }
 
