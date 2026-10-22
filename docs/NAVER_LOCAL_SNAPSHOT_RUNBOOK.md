@@ -170,3 +170,45 @@ On the Mac, update the branch and run:
 If the collector fails again, share ONLY the sanitized
 naver_wordbook_attempt.json or the terminal error text, not profile,
 cookies, private saved word contents or request URLs.
+
+
+## Folder transitions vs pagination (observed 2026-10-23)
+
+The owner reported 32 offline tests passed; the first 2 of 19 folders
+completed and folder #3 appeared to keep advancing pages. The prior
+collector reported only folder-level progress, obscuring the fact that
+it MUST visit every page within one folder before moving to the next.
+
+The updated collector now reports:
+
+    ABEL_STAGE: READING_FOLDER_CARDS (2/19)
+    Reading folder 3/19 ...
+    ABEL_STAGE: READING_CARD_PAGE (2/19)
+      Folder 3/19 | page 1/NN | cards XX/YY
+      Folder 3/19 | page 2/NN | cards XX/YY
+    ABEL_STAGE: FOLDER_COMPLETE (3/19)
+
+NN/YY come from that folder's actual Naver JSON response and are not
+guessed. The current Naver route includes both wbId (which folder) and
+page (which card page). Switching from folder 2 to 3 resets page to 1;
+paging through folder 3 increments only page, keeping wbId fixed.
+
+Card responses are matched by URL query wbId; all returned card
+wordbookId values must equal that folder ID. On any mismatch, incomplete
+pagination, unexpected status or item-count mismatch, the collector
+continues to fail closed without publishing an incomplete snapshot.
+
+Stopping via Ctrl+C leaves no new verified snapshot; the new attempt
+file records folder_index, page_index, page_count and counts ONLY,
+never user-saved text or IDs.
+
+To verify this progress output on Mac:
+
+    cd ~/Downloads/abel-naver-probe
+    git pull origin feat/naver-readonly-network-probe-20261023
+    source .venv/bin/activate
+    python -m unittest discover -s tests -p 'test_naver_wordbook_*.py' -v
+    python -u scripts/naver_wordbook_collect.py
+
+The new folder-switching test uses only synthetic cards and fake
+response objects; actual live end-to-end verification is still pending.
