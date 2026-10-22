@@ -73,7 +73,12 @@ def safe_response_json(response):
     if not isinstance(meta, dict):
         raise NaverSchemaError("No application response metadata")
     status = meta.get("status")
-    if status not in (0, 200, "200", "SUCCESS", "success"):
+    # bool is a Python int subtype; false must not be mistaken for 0.
+    known_success = (
+        (type(status) is int and status in (0, 200))
+        or (type(status) is str and status in ("200", "SUCCESS", "success"))
+    )
+    if not known_success:
         # The service's private application codes are undocumented. The
         # numeric *code* is safe to reveal; meta.message is not (it may
         # contain account-specific text) and must never be logged.
