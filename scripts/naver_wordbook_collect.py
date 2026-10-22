@@ -218,8 +218,12 @@ def run(args):
         drive_dir = Path(args.drive_dir).expanduser()
         if not drive_dir.is_dir():
             raise NaverSchemaError("Drive destination must already exist on the Mac")
-        if drive_dir.resolve() == profile.resolve() or profile.resolve() in drive_dir.resolve().parents:
-            raise NaverSchemaError("Browser profile cannot be a Drive destination")
+        drive_root = drive_dir.resolve()
+        private_profile = profile.resolve()
+        if (drive_root == private_profile
+                or private_profile in drive_root.parents
+                or drive_root in private_profile.parents):
+            raise NaverSchemaError("Browser profile and Drive paths must not overlap")
     else:
         drive_dir = None
 
@@ -276,6 +280,12 @@ def run(args):
                 old.get("digest") == digest
                 and old.get("verified_card_pages") is True)
             if existing_unchanged:
+                # Verify the existing payload actually matches its stored digest.
+                canonical_old = {
+                    key: old.get(key) for key in snapshot
+                }
+                if fingerprint(canonical_old) != digest:
+                    raise ValueError("Saved snapshot digest does not match content")
                 # Preserve the original verification timestamp on unchanged data.
                 full = old
                 summary["verified_at"] = old["verified_at"]
