@@ -267,3 +267,55 @@ The interrupted run reported before this checkpoint feature was deployed
 did not create reusable checkpoints. The completed first two folders from
 that old run must be collected one more time, then subsequent interrupted
 runs can resume.
+
+
+## Offline finalization after 19/19 pages were saved (no repeat scraping)
+
+On 2026-10-23 the owner's last attempt file reported:
+- folder_count=19; completed_folders=19
+- error_stage=VERIFYING_ALL_PAGES
+- error_message=card.content missing entry object
+
+All saved folder cards had passed page-count and folder-ID validation before
+the parser encountered a nonstandard content shape. A former parser raised
+on any such card, preventing the final verified JSON from being created.
+
+**New recovery path:** An offline finalizer reads the local private checkpoint
+and last completed-attempt metadata, revalidates every page/ID, and emits
+the full-count snapshot without logging in or calling Naver:
+
+    cd ~/Downloads/abel-naver-probe
+    git pull origin feat/naver-readonly-network-probe-20261023
+    source .venv/bin/activate
+    python -m unittest discover -s tests -p 'test_naver_wordbook_*.py' -v
+    python -u scripts/naver_wordbook_finalize.py
+
+Expected output, once checkpoint entries for all 19 folders are valid:
+
+    ~/Documents/Abel_Naver_Wordbook/naver_wordbook_verified.json
+    ~/Documents/Abel_Naver_Wordbook/naver_wordbook_status.json
+
+Both are owner-private JSON; do not commit to public GitHub.
+The raw source checkpoint remains in:
+
+    ~/Library/Application Support/Abel/Wordbooks/checkpoint.json
+
+**Critical semantic distinction:** The collection may be COMPLETE
+(collection_complete=true, saved_card_count counts all saved cards) while
+classification is PARTIAL (classification_complete=false) because one or more
+cards contain an unknown content JSON structure. The unresolved list holds
+card IDs, folder IDs, and a constant reason only; full raw contents are
+preserved in the private checkpoint for future decoding. The word list's
+P1-P4 counts are explicitly provisional until every card is classified.
+We do not guess Chinese word, pinyin, or Korean meaning and do not treat
+unclassifiable cards as deleted.
+
+The offline finalizer does not perform a live freshness check; it accepts
+only checkpoints within seven days, checks checksum integrity, and requires
+a last attempt that verified all listed folder pages. If the checkpoint
+contains fewer/more than 19 complete folders or is corrupt, it fails safely
+instead of inventing successful sync status. No Google Drive publish or
+recurring automation is activated.
+
+Next review only the small nav-er_wordbook_status.json to see folder/card
+coverage and unresolved count. Do not upload raw checkpoint/cookies/profile.
