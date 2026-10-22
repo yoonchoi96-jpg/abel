@@ -97,3 +97,45 @@ is missing, explicit publish can still upload the prior verified snapshot.
 - Opt in to Drive publication; verify a private Drive copy.
 - Only then decide on a limited, low-cost periodic change-detection loop
   within the owner Mac, respecting service access rules.
+
+
+## Troubleshooting: no verified JSON appears
+
+An incomplete collection intentionally does NOT write
+naver_wordbook_verified.json or naver_wordbook_status.json.
+
+The updated collector ALWAYS writes a privacy-safe local attempt file:
+
+    ~/Documents/Abel_Naver_Wordbook/naver_wordbook_attempt.json
+
+It records stage, attempted/current folder NUMBER, completed-folder count,
+and sanitized error category/message. It excludes folder IDs, user-saved
+Chinese words, meanings, tokens, cookies, authentication headers and URLs.
+It does not upload this file to Drive by default.
+
+To determine whether the script was ever started, run these commands
+SEPARATELY (avoid using && after unit tests, which might skip collection):
+
+    cd ~/Downloads/abel-naver-probe
+    git pull origin feat/naver-readonly-network-probe-20261023
+    source .venv/bin/activate
+    python -u scripts/naver_wordbook_collect.py
+
+After the collector either completes or exits:
+
+    cat ~/Documents/Abel_Naver_Wordbook/naver_wordbook_attempt.json
+
+Common stages:
+- WAITING_FOR_LOGIN: the collector needs the owner to finish login and Enter.
+- READING_FOLDER_INDEX: UI folder list was not observed / schema invalid.
+- READING_FOLDER_CARDS: a folder's first-party card response was missing or
+  a page/count check failed; inspect folder_index and completed_folders.
+- VERIFYING_ALL_PAGES: parsing or source identity/count validation failed.
+- WRITING_VERIFIED_SNAPSHOT: private filesystem or existing-file issue.
+- FINISHED: fully validated run with a verified local snapshot.
+- INCOMPLETE: look at error_stage and error_category for the last failed step.
+
+If no attempt file appears, the command did not reach collector.main()
+(e.g., unit tests blocked the original && chain, git pull failed, Python
+environment missing, import error or wrong checkout). Share the terminal
+error text, but NEVER share Naver cookies, login tokens or browser profiles.
