@@ -50,6 +50,23 @@ class SafeMetadataTest(unittest.TestCase):
             self.assertNotIn(secret, raw)
         self.assertEqual(shape["fields"]["wordbooks"]["type"], "array")
 
+    def test_array_record_schema_is_visible_without_values(self):
+        private = {
+            "data": {
+                "m_items": [{
+                    "entryName": "PRIVATE_CHINESE_WORD",
+                    "pinyin": "PRIVATE_PINYIN",
+                    "meaning": "PRIVATE_KOREAN_MEANING",
+                }]
+            }
+        }
+        shape = skeleton(private)
+        fields = shape["fields"]["data"]["fields"]["m_items"]["item"]["fields"]
+        self.assertEqual(fields["entryName"], {"type": "string"})
+        self.assertEqual(fields["pinyin"], {"type": "string"})
+        for secret in ("PRIVATE_CHINESE_WORD", "PRIVATE_PINYIN", "PRIVATE_KOREAN_MEANING"):
+            self.assertNotIn(secret, json.dumps(shape))
+
     def test_merges_repeated_endpoint_without_body(self):
         c = MetadataCollector()
         url = "https://learn.dict.naver.com/wordbook/api/folders?wbId=secret1"
