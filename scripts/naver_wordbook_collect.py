@@ -50,6 +50,35 @@ def matches_response(response, endpoint, *, folder_id=None):
         return False
 
 
+def is_paginated_wordbook_payload(payload):
+    """Strict structural gate for observed Naver meta.status=1 responses.
+
+    The first-party UI returned status 1 in a HTTP-200 folder response.
+    That alone does not prove success. Require the full folder/card page
+    envelope, leaving detailed page and identity checks to callers.
+    """
+    if not isinstance(payload, dict):
+        return False
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return False
+    items = data.get("m_items")
+    if not isinstance(items, list) or not all(isinstance(x, dict) for x in items):
+        return False
+    total = data.get("m_total")
+    if type(total) is not int or total < 0:
+        return False
+    for page_key, count_key in (
+        ("m_page", "m_totalPage"),
+        ("m_current_page", "m_total_pages"),
+    ):
+        page, pages = data.get(page_key), data.get(count_key)
+        if (type(page) is int and type(pages) is int
+                and page >= 0 and pages >= 0):
+            return True
+    return False
+
+
 def safe_response_json(response):
     if response.status != 200:
         raise NaverSchemaError("Naver returned HTTP {} for a read".format(response.status))
@@ -78,6 +107,11 @@ def safe_response_json(response):
         (type(status) is int and status in (0, 200))
         or (type(status) is str and status in ("200", "SUCCESS", "success"))
     )
+    # A real authenticated UI response used meta.status=1. Accept that
+    # observation ONLY for structurally valid paginated folder/card data.
+    # Other status values (including 1 with an error-shaped body) still fail.
+    if type(status) is int and status == 1:
+        known_success = is_paginated_wordbook_payload(data)
     if not known_success:
         # The service's private application codes are undocumented. The
         # numeric *code* is safe to reveal; meta.message is not (it may
