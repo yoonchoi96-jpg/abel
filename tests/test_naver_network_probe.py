@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from naver_network_probe import (  # noqa: E402
-    MetadataCollector, sanitized_endpoint, skeleton,
+    MetadataCollector, has_word_cards, sanitized_endpoint, skeleton,
 )
 
 
@@ -83,6 +83,17 @@ class SafeMetadataTest(unittest.TestCase):
         self.assertNotIn("secret2", json.dumps(report))
         self.assertNotIn("id1", json.dumps(report))
         self.assertNotIn("other", json.dumps(report))
+
+    def test_folder_list_is_not_word_card_response(self):
+        collector = MetadataCollector()
+        folder = "https://learn.dict.naver.com/gateway-api/zhkodict/mywordbook/wordbook/list.dict"
+        cards = "https://learn.dict.naver.com/gateway-api/zhkodict/mywordbook/word/list/search"
+        collector.record(url=folder, method="GET", status=200,
+                         content_type="application/json", body=b'{"data":{"m_items":[]}}')
+        self.assertFalse(has_word_cards(collector))
+        collector.record(url=cards, method="GET", status=200,
+                         content_type="application/json", body=b'{"data":{"m_items":[]}}')
+        self.assertTrue(has_word_cards(collector))
 
     def test_unrelated_path_without_relevant_json_not_captured(self):
         c = MetadataCollector()
