@@ -209,8 +209,10 @@ def atomic_save_if_changed(destination, payload):
     return True
 
 
-def run(args):
+def run(args, progress=lambda stage, **details: None):
     from playwright.sync_api import sync_playwright
+
+    progress("CHECKING_DESTINATION")
 
     profile = Path(args.profile_dir).expanduser()
     output_dir = Path(args.output_dir).expanduser()
@@ -227,6 +229,7 @@ def run(args):
     else:
         drive_dir = None
 
+    progress("OPENING_BROWSER")
     profile.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
         context = p.chromium.launch_persistent_context(
@@ -235,18 +238,26 @@ def run(args):
         page = context.pages[0] if context.pages else context.new_page()
         try:
             page.goto(MAIN, wait_until="domcontentloaded", timeout=args.timeout * 1000)
+            progress("WAITING_FOR_LOGIN")
             print("Log in to NAVER Chinese wordbook if required.")
             input("When the wordbook home screen is visible, press Enter: ")
+            progress("READING_FOLDER_INDEX")
             folders, total = load_folders(page, args.timeout * 1000)
+            progress("FOLDER_INDEX_READY", folder_count=total)
             print("Verified {} wordbook folder index entries".format(total))
             per_folder = {}
             for n, folder in enumerate(folders, 1):
                 # Do not print personal folder names/IDs to CI or public logs.
+                progress("READING_FOLDER_CARDS", folder_index=n,
+                         folder_count=total, completed_folders=n - 1)
                 print("Reading folder {}/{} ...".format(n, total))
                 per_folder[folder["id"]] = load_cards_for_folder(
                     page, folder, timeout_ms=args.timeout * 1000,
                     pause_s=args.pause)
+                progress("FOLDER_COMPLETE", folder_index=n,
+                         folder_count=total, completed_folders=n)
                 time.sleep(args.pause)
+            progress("VERIFYING_ALL_PAGES", completed_folders=total)
             snapshot = build_snapshot(
                 folders, per_folder, reported_folder_count=total)
         finally:
@@ -292,9 +303,11 @@ def run(args):
         except (OSError, ValueError, KeyError, TypeError) as exc:
             raise NaverSchemaError(
                 "Existing output is corrupted; refuse overwrite") from exc
+    progress("WRITING_VERIFIED_SNAPSHOT", completed_folders=total)
     changed = False if existing_unchanged else atomic_save_if_changed(dest, full)
     atomic_save_if_changed(output_dir / "naver_wordbook_status.json", summary)
     if drive_dir:
+        progress("PUBLISHING_DRIVE_COPY")
         # An existing local snapshot can still be published on an unchanged run.
         # Never upload browser profiles, cookies or the raw HTTP responses.
         atomic_save_if_changed(drive_dir / dest.name, full)
@@ -302,6 +315,9 @@ def run(args):
     print("Verified snapshot: {} (changed={})".format(dest, changed))
     print("Folders={} cards={} words={} priorities={}".format(
         total, snapshot["saved_card_count"], len(snapshot["words"]), priorities))
+    progress("FINISHED", complete=True, folder_count=total,
+             saved_card_count=snapshot["saved_card_count"],
+             distinct_words=len(snapshot["words"]))
     return summary
 
 
@@ -320,14 +336,46 @@ def main():
         cli.error("Use timeout >= 10s and pause >= 0.7s to avoid excessive traffic")
     if args.profile_dir.expanduser().resolve() == args.output_dir.expanduser().resolve():
         cli.error("Browser profile cannot be the snapshot output directory")
+    # Always emit a small non-sensitive attempt status, even if collection fails.
+    # Never export word values, wordbook names, IDs, cookies, URLs or raw errors.
+    diagnostic = args.output_dir.expanduser() / "naver_wordbook_attempt.json"
+    attempt = {
+        "format": "abel.naver.collect_attempt.v1",
+        "started_at": now_iso(),
+        "stage": "STARTING", "complete": False,
+        "folder_count": None, "folder_index": 0,
+        "completed_folders": 0,
+    }
+
+    def progress(stage, **details):
+        attempt.update(details)
+        attempt["stage"] = stage
+        attempt["updated_at"] = now_iso()
+        atomic_save_if_changed(diagnostic, attempt)
+        print("ABEL_STAGE: {} ({}/{})".format(
+            stage, attempt["completed_folders"],
+            attempt["folder_count"] if attempt["folder_count"] is not None else "?"),
+            flush=True)
+
+    progress("STARTING")
     try:
-        run(args)
+        run(args, progress=progress)
     except NaverSchemaError as exc:
-        raise SystemExit("INCOMPLETE: no new verified snapshot. " + str(exc)) from None
-    except Exception as exc:
-        # Browser errors may contain private query values. Never print raw error text.
+        failed_stage = attempt["stage"]
+        progress("INCOMPLETE", error_stage=failed_stage,
+                 error_category="NaverSchemaError",
+                 error_message=str(exc))
         raise SystemExit(
-            "INCOMPLETE: no new verified snapshot. Browser/IO error type: "
+            "INCOMPLETE: existing verified data unchanged. "
+            "See naver_wordbook_attempt.json; error: " + str(exc)) from None
+    except Exception as exc:
+        failed_stage = attempt["stage"]
+        progress("INCOMPLETE", error_stage=failed_stage,
+                 error_category=type(exc).__name__,
+                 error_message="Browser/IO exception (details intentionally omitted)")
+        raise SystemExit(
+            "INCOMPLETE: existing verified data unchanged. "
+            "See naver_wordbook_attempt.json; exception type: "
             + type(exc).__name__) from None
 
 
