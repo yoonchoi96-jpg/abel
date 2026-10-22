@@ -388,8 +388,13 @@ def run(args, progress=lambda stage, **details: None):
     full = dict(snapshot, source="naver_owner_local_ui",
                 verified_at=now_iso(), digest=digest)
     summary = {
-        "format": "abel.naver.sync_status.v1", "verified_at": full["verified_at"],
-        "complete": True, "folder_count": total,
+        "format": "abel.naver.sync_status.v2", "verified_at": full["verified_at"],
+        "complete": snapshot["classification_complete"],
+        "collection_complete": True,
+        "classification_complete": snapshot["classification_complete"],
+        "priority_counts_provisional": snapshot["priority_counts_provisional"],
+        "unresolved_card_count": snapshot["unresolved_card_count"],
+        "folder_count": total,
         "saved_card_count": snapshot["saved_card_count"],
         "distinct_words": len(snapshot["words"]),
         "priorities": priorities, "sha256": digest,
@@ -431,9 +436,19 @@ def run(args, progress=lambda stage, **details: None):
     print("Verified snapshot: {} (changed={})".format(dest, changed))
     print("Folders={} cards={} words={} priorities={}".format(
         total, snapshot["saved_card_count"], len(snapshot["words"]), priorities))
-    progress("FINISHED", complete=True, folder_count=total,
+    stage = ("FINISHED" if snapshot["classification_complete"]
+             else "FINISHED_WITH_UNRESOLVED")
+    progress(stage, complete=snapshot["classification_complete"],
+             collection_complete=True,
+             classification_complete=snapshot["classification_complete"],
+             unresolved_card_count=snapshot["unresolved_card_count"],
+             folder_count=total,
              saved_card_count=snapshot["saved_card_count"],
              distinct_words=len(snapshot["words"]))
+    if snapshot["unresolved_card_count"]:
+        print("NOTICE: {} card(s) preserved in private checkpoint but "
+              "not yet classifiable; priority counts are provisional."
+              .format(snapshot["unresolved_card_count"]), flush=True)
     return summary
 
 
