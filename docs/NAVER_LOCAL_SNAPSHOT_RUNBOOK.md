@@ -319,3 +319,50 @@ recurring automation is activated.
 
 Next review only the small nav-er_wordbook_status.json to see folder/card
 coverage and unresolved count. Do not upload raw checkpoint/cookies/profile.
+
+
+## Recovery: checkpoint folder count differs from completed UI count (2026-10-23)
+
+The owner has independently run **51** offline tests with all passing.
+The following local command then failed:
+
+    python -u scripts/naver_wordbook_finalize.py
+
+Error:
+
+    Checkpoint folder count does not match last completed UI collection
+
+The last sanitized attempt report established 19/19 folders collected, but
+the checkpoint count could include extra older/orphan folder entries; the
+actual count is not yet established. Do NOT delete the checkpoint or blindly
+take the first/last 19 entries.
+
+**New index-only reconciliation**, using the existing logged-in Naver
+browser session; no word-card pages are scraped and no manual Enter:
+
+    cd ~/Downloads/abel-naver-probe
+    git pull origin feat/naver-readonly-network-probe-20261023
+    source .venv/bin/activate
+    python -m unittest discover -s tests -p 'test_naver_wordbook_*.py' -v
+    python -u scripts/naver_wordbook_finalize.py --reconcile-index
+
+This uses Playwright to navigate the first-party Naver Chinese wordbook
+**folder-index UI only** once. It fetches the current ID/name/count/update
+markers for exactly the 19 currently listed folders, matches all selected
+records to the existing local cache, verifies every cached card page digest,
+ID, folder/page count, and reconstructs the verified JSON. Any stale extra
+cache entries are LEFT intact and excluded, not deleted or silently reused.
+
+If a current folder has no cache entry, or the folder update/count markers
+have changed, reconciliation MUST refuse finalization. Then run only:
+
+    python -u scripts/naver_wordbook_collect.py --unattended
+
+This incremental collector reuses valid unchanged cached folders and reads
+only missing/changed ones. NEVER delete private checkpoint.json or send it
+to a public GitHub repo. Share only the small, sanitized status JSON.
+
+Index-only verification does not confirm that no word-card content changed
+without changing its folder metadata; normal cache freshness restrictions
+and a weekly per-folder reread are still necessary. This remains a staged
+read-only implementation, not an enabled recurring schedule.
