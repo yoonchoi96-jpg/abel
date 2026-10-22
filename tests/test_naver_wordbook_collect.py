@@ -62,6 +62,28 @@ class CollectorTests(unittest.TestCase):
             safe_response_json(DummyResponse({
                 "meta": {"status": 403, "message": "fail"}, "data": {}}))
 
+    def test_unknown_application_code_is_reported_without_message(self):
+        response = DummyResponse({
+            "meta": {"status": 2000, "message": "PRIVATE_ACCOUNT_DATA"},
+            "data": {"m_items": [{"id": "PRIVATE_FOLDER"}]},
+        })
+        with self.assertRaises(NaverSchemaError) as error:
+            safe_response_json(response)
+        self.assertIn("2000", str(error.exception))
+        self.assertNotIn("PRIVATE_ACCOUNT_DATA", str(error.exception))
+        self.assertNotIn("PRIVATE_FOLDER", str(error.exception))
+
+    def test_unknown_application_status_string_is_not_exposed(self):
+        response = DummyResponse({
+            "meta": {"status": "SECRET_USER_TOKEN", "message": "PRIVATE"},
+            "data": {},
+        })
+        with self.assertRaises(NaverSchemaError) as error:
+            safe_response_json(response)
+        self.assertIn("nonstandard_type_str", str(error.exception))
+        self.assertNotIn("SECRET", str(error.exception))
+        self.assertNotIn("PRIVATE", str(error.exception))
+
     def test_rejects_403_http(self):
         with self.assertRaises(NaverSchemaError):
             safe_response_json(DummyResponse({
