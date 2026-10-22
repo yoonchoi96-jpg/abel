@@ -20,6 +20,9 @@ from pathlib import Path
 from urllib.parse import parse_qs, quote, urlsplit
 
 from naver_wordbook_parser import NaverSchemaError, build_snapshot
+from naver_wordbook_checkpoint import (
+    cached_pages, load_cache, save_checkpoint, remove_absent_folders,
+)
 
 MAIN = "https://learn.dict.naver.com/wordbook/zhkodict/#/my/main"
 ORIGIN = "learn.dict.naver.com"
@@ -27,6 +30,9 @@ FOLDER_PATH = "/gateway-api/zhkodict/mywordbook/wordbook/list.dict"
 CARD_PATH = "/gateway-api/zhkodict/mywordbook/word/list/search"
 PROFILE = Path.home() / "Library/Application Support/Abel/NaverProfile"
 OUTPUT = Path.home() / "Documents/Abel_Naver_Wordbook"
+CHECKPOINT = (
+    Path.home() / "Library/Application Support/Abel/Wordbooks/checkpoint.json"
+)
 MAX_FOLDERS = 500
 MAX_CARDS = 100_000
 MAX_PAGES_PER_FOLDER = 300
@@ -188,7 +194,13 @@ def load_folders(page, timeout_ms):
             raise NaverSchemaError("Invalid saved-folder name")
         if type(count) is not int or count < 0:
             raise NaverSchemaError("Invalid saved-folder count")
-        folders.append({"id": folder_id, "name": name, "wordCount": count})
+        folders.append({
+            "id": folder_id, "name": name, "wordCount": count,
+            "updateTimestamp": item.get("updateTimestamp"),
+            "lastWordTimestamp": item.get("lastWordTimestamp"),
+            "lastReciteTimestamp": item.get("lastReciteTimestamp"),
+            "lastLearnTimestamp": item.get("lastLearnTimestamp"),
+        })
     if len({x["id"] for x in folders}) != total:
         raise NaverSchemaError("Folder list includes duplicate IDs")
     return folders, total
@@ -287,17 +299,32 @@ def run(args, progress=lambda stage, **details: None):
         drive_dir = None
 
     progress("OPENING_BROWSER")
+    checkpoint_path = Path(args.checkpoint_path).expanduser().resolve()
+    if args.publish_to_drive:
+        # Local checkpoint holds raw private words. Never store it in Drive.
+        drive_root = Path(args.drive_dir).expanduser().resolve()
+        if checkpoint_path == drive_root or drive_root in checkpoint_path.parents:
+            raise NaverSchemaError("Raw checkpoint cannot be in a Drive folder")
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    cache = load_cache(checkpoint_path)
     profile.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
         context = p.chromium.launch_persistent_context(
-            user_data_dir=str(profile), headless=False,
+            user_data_dir=str(profile), headless=args.unattended,
             viewport={"width": 1280, "height": 900})
         page = context.pages[0] if context.pages else context.new_page()
         try:
             page.goto(MAIN, wait_until="domcontentloaded", timeout=args.timeout * 1000)
-            progress("WAITING_FOR_LOGIN")
-            print("Log in to NAVER Chinese wordbook if required.")
-            input("When the wordbook home screen is visible, press Enter: ")
+            if args.unattended:
+                progress("REUSING_SAVED_LOGIN")
+                if urlsplit(page.url).hostname == "nid.naver.com":
+                    raise NaverSchemaError(
+                        "LOGIN_REQUIRED: saved browser session expired; "
+                        "run once interactively to sign in")
+            else:
+                progress("WAITING_FOR_LOGIN")
+                print("Log in to NAVER Chinese wordbook if required.")
+                input("When the wordbook home screen is visible, press Enter: ")
             progress("READING_FOLDER_INDEX")
             folders, total = load_folders(page, args.timeout * 1000)
             progress("FOLDER_INDEX_READY", folder_count=total)
@@ -318,17 +345,37 @@ def run(args, progress=lambda stage, **details: None):
                         n, total, page_index, page_count, cards_read,
                         cards_expected), flush=True)
 
-                per_folder[folder["id"]] = load_cards_for_folder(
-                    page, folder, timeout_ms=args.timeout * 1000,
-                    pause_s=args.pause, page_progress=page_progress)
+                pages = None if args.full_refresh else cached_pages(cache, folder)
+                if pages is not None:
+                    progress("FOLDER_UNCHANGED", folder_index=n,
+                             folder_count=total, completed_folders=n,
+                             page_index=0, page_count=0,
+                             cards_read=folder["wordCount"],
+                             cards_expected=folder["wordCount"])
+                    print("  Folder {}/{}: unchanged, used local checkpoint".format(
+                        n, total), flush=True)
+                else:
+                    pages = load_cards_for_folder(
+                        page, folder, timeout_ms=args.timeout * 1000,
+                        pause_s=args.pause, page_progress=page_progress)
+                    # Validate before writing a *private, local* checkpoint.
+                    save_checkpoint(cache, folder, pages, checkpoint_path,
+                                    atomic_save_if_changed)
+                    progress("FOLDER_CHECKPOINTED", folder_index=n,
+                             folder_count=total, completed_folders=n)
+                    time.sleep(args.pause)
+                per_folder[folder["id"]] = pages
                 progress("FOLDER_COMPLETE", folder_index=n,
                          folder_count=total, completed_folders=n,
                          page_index=0, page_count=0,
                          cards_read=0, cards_expected=0)
-                time.sleep(args.pause)
             progress("VERIFYING_ALL_PAGES", completed_folders=total)
             snapshot = build_snapshot(
                 folders, per_folder, reported_folder_count=total)
+            # Folder removal is permitted only after the complete folder index
+            # and every current folder's data have been independently verified.
+            remove_absent_folders(cache, (x["id"] for x in folders),
+                                  checkpoint_path, atomic_save_if_changed)
         finally:
             context.close()
 
@@ -398,6 +445,11 @@ def main():
     cli.add_argument("--pause", type=float, default=1.0)
     cli.add_argument("--drive-dir", type=Path)
     cli.add_argument("--publish-to-drive", action="store_true")
+    cli.add_argument("--checkpoint-path", type=Path, default=CHECKPOINT)
+    cli.add_argument("--unattended", action="store_true",
+                     help="reuse local browser profile without login prompt")
+    cli.add_argument("--full-refresh", action="store_true",
+                     help="read all folder pages even when unchanged")
     args = cli.parse_args()
     if args.publish_to_drive and not args.drive_dir:
         cli.error("--publish-to-drive requires --drive-dir")
