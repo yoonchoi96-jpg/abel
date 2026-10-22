@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from naver_network_probe import (  # noqa: E402
     MetadataCollector, has_word_cards, sanitized_endpoint, skeleton,
+    embedded_content_structure, content_schema_for_word_cards,
 )
 
 
@@ -66,6 +67,33 @@ class SafeMetadataTest(unittest.TestCase):
         self.assertEqual(fields["pinyin"], {"type": "string"})
         for secret in ("PRIVATE_CHINESE_WORD", "PRIVATE_PINYIN", "PRIVATE_KOREAN_MEANING"):
             self.assertNotIn(secret, json.dumps(shape))
+
+    def test_embedded_json_redacts_all_values(self):
+        value = json.dumps({"pinyin": "pRIVATE", "definitions": [{"ko": "기밀단어"}]})
+        metadata = embedded_content_structure(value)
+        self.assertEqual(metadata["format"], "json_string")
+        fields = metadata["schema"]["fields"]
+        self.assertEqual(fields["pinyin"], {"type": "string"})
+        self.assertNotIn("pRIVATE", json.dumps(metadata, ensure_ascii=False))
+        self.assertNotIn("기밀단어", json.dumps(metadata, ensure_ascii=False))
+
+    def test_embedded_html_redacts_text_and_attributes(self):
+        value = '<p class="secret">私人단어 <span data-id="secret123">meaning</span></p>'
+        metadata = embedded_content_structure(value)
+        self.assertEqual(metadata["format"], "html_fragment")
+        self.assertEqual(metadata["tags"], ["p", "span"])
+        for secret in ("secret", "secret123", "私人", "meaning"):
+            self.assertNotIn(secret, json.dumps(metadata, ensure_ascii=False))
+
+    def test_embedded_plaintext_language_flags_not_text(self):
+        metadata = embedded_content_structure("私人 단어")
+        self.assertEqual(metadata["format"], "plain_text")
+        self.assertTrue(metadata["contains_hanzi"])
+        self.assertTrue(metadata["contains_hangul"])
+        self.assertNotIn("私人", json.dumps(metadata, ensure_ascii=False))
+
+    def test_card_content_shape_missing_items(self):
+        self.assertIsNone(content_schema_for_word_cards({"data": {"m_items": []}}))
 
     def test_merges_repeated_endpoint_without_body(self):
         c = MetadataCollector()
