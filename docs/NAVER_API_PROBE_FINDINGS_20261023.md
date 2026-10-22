@@ -35,3 +35,22 @@ In a Mac checkout of the feature branch:
 Log into Naver if prompted, click several separate Chinese wordbook folders and a page of cards, then share only the generated naver_api_probe.json.
 
 The production Abel import boundary, data/naver_wordbook.json, remains unchanged.
+
+
+## Second diagnostic: 03:23:22 KST
+
+Owner supplied a new report (captured_at 2026-10-22T18:23:22.854235Z, 7,872 bytes).
+This report is distinct from the 03:01 report. It contains four groups:
+category/list, wordbook/list.dict, user/message.dict and word/count.dict.
+No word/list/search event was observed. The expanded skeleton correctly
+shows all 20 folder-item field names and types from 19 items, but cannot
+show word-card fields without a word-card response.
+
+The probe now automatically clicks a visible personal wordbook link (read-only
+UI navigation) after login, with a manual click fallback and a warning if no
+word/list/search endpoint was observed. This changes only the experimental
+probe, not the production sync architecture.
+
+To get card field types, update this branch then run the local probe again.
+No passwords, cookies, folder ID values, words or meanings belong in the
+diagnostic report.
