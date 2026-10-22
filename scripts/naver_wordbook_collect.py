@@ -95,7 +95,10 @@ def require_page(data, *, collection, expected_page=None):
     if total < 0 or number < 0 or page_count < 0:
         raise NaverSchemaError("Negative pagination field in {}".format(collection))
     if expected_page is not None and number != expected_page:
-        raise NaverSchemaError("UI route did not open expected page of {}".format(collection))
+        # Naver may return index zero for a genuinely empty wordbook.
+        if not (collection == "cards" and expected_page == 1
+                and total == 0 and page_count == 0 and number == 0):
+            raise NaverSchemaError("UI route did not open expected page of {}".format(collection))
     return items, total, number, page_count
 
 
