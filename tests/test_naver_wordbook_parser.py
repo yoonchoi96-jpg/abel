@@ -95,6 +95,42 @@ class ParserTests(unittest.TestCase):
         with self.assertRaises(NaverSchemaError):
             validate_folder_pages("folderA", [response], 1)
 
+    def test_contiguous_pages_required_even_when_counts_match(self):
+        cards1 = [fake_card("维护", "A", 1)]
+        cards3 = [fake_card("潜力", "A", 2)]
+        pages = [
+            {"data": {"m_total": 2, "m_total_pages": 2,
+                      "m_current_page": 1, "m_items": cards1}},
+            {"data": {"m_total": 2, "m_total_pages": 2,
+                      "m_current_page": 3, "m_items": cards3}},
+        ]
+        with self.assertRaises(NaverSchemaError):
+            validate_folder_pages("A", pages, 2)
+
+    def test_folder_count_must_match_authoritative_total(self):
+        folders = [{"id": "A", "name": "A", "wordCount": 1}]
+        response = {"data": {"m_total": 1, "m_total_pages": 1,
+                             "m_current_page": 1,
+                             "m_items": [fake_card("适应", "A", 1)]}}
+        with self.assertRaises(NaverSchemaError):
+            build_snapshot(folders, {"A": [response]}, reported_folder_count=2)
+
+    def test_complete_preview_with_multiple_folders(self):
+        folders = [
+            {"id": "A", "name": "A", "wordCount": 1},
+            {"id": "B", "name": "B", "wordCount": 1},
+        ]
+        pages = {
+            folder: [{"data": {
+                "m_total": 1, "m_total_pages": 1, "m_current_page": 1,
+                "m_items": [fake_card("损失", folder, i)],
+            }}] for i, folder in enumerate(("A", "B"), 1)
+        }
+        snapshot = build_snapshot(folders, pages, reported_folder_count=2)
+        self.assertEqual(snapshot["saved_card_count"], 2)
+        self.assertEqual(snapshot["words"][0]["folder_count"], 2)
+        self.assertEqual(snapshot["words"][0]["priority"], "P3")
+
     def test_build_snapshot_needs_every_folder(self):
         folders = [{"id": "folderA", "name": "A", "wordCount": 1},
                    {"id": "folderB", "name": "B", "wordCount": 1}]
@@ -102,7 +138,7 @@ class ParserTests(unittest.TestCase):
                          "m_current_page": 1,
                          "m_items": [fake_card("潜力", "folderA", 1)]}}
         with self.assertRaises(NaverSchemaError):
-            build_snapshot(folders, {"folderA": [page]})
+            build_snapshot(folders, {"folderA": [page]}, reported_folder_count=2)
 
 
 if __name__ == "__main__":
