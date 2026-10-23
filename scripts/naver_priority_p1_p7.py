@@ -222,7 +222,27 @@ def main():
     cli.add_argument("--output-dir", type=Path, default=OUTPUT)
     args = cli.parse_args()
     checkpoint = load_cache(args.checkpoint_path)
+    # A previous collection may leave stale/extra cache entries. Only run
+    # against exactly the full folder count from an already verified snapshot.
+    source_path = args.output_dir.expanduser() / "naver_wordbook_verified.json"
+    if not source_path.is_file():
+        raise SystemExit("Missing verified source snapshot; no priorities written.")
+    try:
+        source = json.loads(source_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise SystemExit("Verified source snapshot cannot be decoded.") from exc
+    if (not isinstance(source, dict) or
+            source.get("verified_card_pages") is not True or
+            type(source.get("folder_count")) is not int or
+            type(source.get("saved_card_count")) is not int or
+            len(checkpoint["entries"]) != source["folder_count"]):
+        raise SystemExit(
+            "Source snapshot and cached folder count disagree; "
+            "do not classify stale checkpoint entries.")
     result = produce(checkpoint, load_hsk_words(HSK6_CSV), load_hsk_words(HSK79_CSV))
+    if result["saved_card_count"] != source["saved_card_count"]:
+        raise SystemExit(
+            "Verified card total and checkpoint differ; no priorities written.")
     dest = args.output_dir.expanduser() / "naver_wordbook_priority_p1_p7.json"
     status = args.output_dir.expanduser() / "naver_wordbook_priority_p1_p7_status.json"
     atomic_save_if_changed(dest, result)
